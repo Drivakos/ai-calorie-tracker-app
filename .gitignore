@@ -1,0 +1,171 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code
+.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+*.g.dart
+*.freezed.dart
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ============================================
+# SECRETS & SENSITIVE FILES - DO NOT COMMIT!
+# ============================================
+
+# API Keys and secrets
+lib/secrets.dart
+lib/supabase_config.dart
+
+# Environment files
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+*.env
+
+# Firebase configuration (contains API keys)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+ios/firebase_app_id_file.json
+
+# ============================================
+# SUPABASE LOCAL DEVELOPMENT
+# ============================================
+
+# Supabase local files (contains sensitive data)
+supabase/.branches/
+supabase/.temp/
+supabase/.secrets
+
+# ============================================
+# NODE.JS (for Firebase functions, etc.)
+# ============================================
+
+node_modules/
+package-lock.json
+npm-debug.log
+yarn-error.log
+
+# ============================================
+# PLATFORM BUILD ARTIFACTS
+# ============================================
+
+# Windows
+/windows/flutter/ephemeral/
+/windows/x64/
+
+# macOS
+/macos/Flutter/ephemeral/
+*.xcworkspace
+!default.xcworkspace
+xcuserdata/
+DerivedData/
+Pods/
+
+# Linux
+/linux/flutter/ephemeral/
+
+# iOS
+/ios/Flutter/ephemeral/
+/ios/Pods/
+/ios/.symlinks/
+
+# Android
+/android/.gradle/
+/android/local.properties
+/android/app/src/main/java/io/flutter/plugins/
+*.apk
+*.aab
+
+# Web
+/web/.dart_tool/
+
+# ============================================
+# TEST & COVERAGE
+# ============================================
+
+coverage/
+.test_coverage.dart
+*.lcov
+
+# ============================================
+# GENERATED FILES
+# ============================================
+
+# Mockito generated mocks (regenerate with build_runner)
+*.mocks.dart
+
+# JSON serialization
+*.g.dart
+
+# Freezed
+*.freezed.dart
+
+# ============================================
+# IDE & EDITOR
+# ============================================
+
+# JetBrains IDEs
+.idea/
+*.iml
+
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+
+# Cursor
+.cursor/
+
+# ============================================
+# MISC
+# ============================================
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Lock files (optional - some prefer to commit these)
+# pubspec.lock

@@ -1,0 +1,10 @@
+// Copy this file to supabase_config.dart and fill in your credentials
+// DO NOT commit supabase_config.dart to version control!
+
+class SupabaseConfig {
+  // Your Supabase project URL
+  static const String url = 'https://YOUR_PROJECT_REF.supabase.co';
+  
+  // Anon/Publishable key - safe to expose in client
+  static const String anonKey = 'YOUR_SUPABASE_ANON_KEY';
+}
