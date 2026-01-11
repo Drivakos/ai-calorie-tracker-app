@@ -253,6 +253,7 @@ class UserProfile {
   final HeightUnit heightUnit;
   final ActivityLevel? activityLevel;
   final CalorieGoal calorieGoal;
+  final int mealsPerDay; // Minimum 2
   final List<String> preferredFoods;
   final List<String> allergies;
   final List<String> dietaryRestrictions;
@@ -269,6 +270,7 @@ class UserProfile {
     this.heightUnit = HeightUnit.cm,
     this.activityLevel,
     this.calorieGoal = CalorieGoal.maintain,
+    this.mealsPerDay = 3,
     this.preferredFoods = const [],
     this.allergies = const [],
     this.dietaryRestrictions = const [],
@@ -342,6 +344,7 @@ class UserProfile {
       'heightUnit': heightUnit.name,
       'activityLevel': activityLevel?.dbValue,
       'calorieGoal': calorieGoal.dbValue,
+      'mealsPerDay': mealsPerDay,
       'preferredFoods': preferredFoods,
       'allergies': allergies,
       'dietaryRestrictions': dietaryRestrictions,
@@ -363,6 +366,7 @@ class UserProfile {
           ? ActivityLevel.fromString(map['activityLevel'])
           : null,
       calorieGoal: CalorieGoal.fromString(map['calorieGoal']),
+      mealsPerDay: map['mealsPerDay'] ?? 3,
       preferredFoods: _parseStringList(map['preferredFoods']),
       allergies: _parseStringList(map['allergies']),
       dietaryRestrictions: _parseStringList(map['dietaryRestrictions']),
@@ -387,6 +391,7 @@ class UserProfile {
     HeightUnit? heightUnit,
     ActivityLevel? activityLevel,
     CalorieGoal? calorieGoal,
+    int? mealsPerDay,
     List<String>? preferredFoods,
     List<String>? allergies,
     List<String>? dietaryRestrictions,
@@ -403,6 +408,7 @@ class UserProfile {
       heightUnit: heightUnit ?? this.heightUnit,
       activityLevel: activityLevel ?? this.activityLevel,
       calorieGoal: calorieGoal ?? this.calorieGoal,
+      mealsPerDay: mealsPerDay ?? this.mealsPerDay,
       preferredFoods: preferredFoods ?? this.preferredFoods,
       allergies: allergies ?? this.allergies,
       dietaryRestrictions: dietaryRestrictions ?? this.dietaryRestrictions,

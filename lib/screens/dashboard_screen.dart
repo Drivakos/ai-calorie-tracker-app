@@ -5,6 +5,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:ai_calorie_tracker/providers/food_provider.dart';
 import 'package:ai_calorie_tracker/screens/manual_entry_screen.dart';
 import 'package:ai_calorie_tracker/screens/analysis_screen.dart';
+import 'package:ai_calorie_tracker/screens/profile_screen.dart';
 import 'package:ai_calorie_tracker/providers/user_provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -57,6 +58,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               backgroundColor: theme.colorScheme.background,
               surfaceTintColor: Colors.transparent,
               actions: [
+                ShadButton.ghost(
+                  size: ShadButtonSize.sm,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                    );
+                  },
+                  child: Icon(
+                    LucideIcons.userCog,
+                    size: 20,
+                    color: theme.colorScheme.foreground,
+                  ),
+                ),
                 ShadButton.ghost(
                   size: ShadButtonSize.sm,
                   onPressed: () {

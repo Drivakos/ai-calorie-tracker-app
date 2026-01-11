@@ -341,6 +341,7 @@ void main() {
         heightUnit: HeightUnit.cm,
         activityLevel: ActivityLevel.moderatelyActive,
         calorieGoal: CalorieGoal.moderateCut,
+        mealsPerDay: 3,
       );
 
       verify(mockUserService.saveUserProfile(any)).called(1);
@@ -365,6 +366,7 @@ void main() {
         heightUnit: HeightUnit.cm,
         activityLevel: ActivityLevel.moderatelyActive,
         calorieGoal: CalorieGoal.maintain,
+        mealsPerDay: 3,
       );
 
       verifyNever(mockUserService.saveUserProfile(any));

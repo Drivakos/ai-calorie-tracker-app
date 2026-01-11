@@ -23,6 +23,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   HeightUnit _selectedHeightUnit = HeightUnit.cm;
   ActivityLevel _selectedActivityLevel = ActivityLevel.moderatelyActive;
   CalorieGoal _selectedCalorieGoal = CalorieGoal.maintain;
+  int _mealsPerDay = 3;
   bool _isLoading = false;
 
   // Food preferences
@@ -65,6 +66,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         heightUnit: _selectedHeightUnit,
         activityLevel: _selectedActivityLevel,
         calorieGoal: _selectedCalorieGoal,
+        mealsPerDay: _mealsPerDay,
         preferredFoods: _preferredFoods,
         allergies: _selectedAllergies.toList(),
         dietaryRestrictions: _selectedDietaryRestrictions.toList(),
@@ -197,6 +199,78 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                                 }
                                 return null;
                               },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Meals Per Day Card
+                    ShadCard(
+                      title: Row(
+                        children: [
+                          Icon(LucideIcons.utensilsCrossed, size: 18, color: theme.colorScheme.primary),
+                          const SizedBox(width: 8),
+                          const Text('Meals Per Day'),
+                        ],
+                      ),
+                      description: const Text('How many meals do you typically eat? (minimum 2)'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                ShadButton.outline(
+                                  size: ShadButtonSize.sm,
+                                  onPressed: _mealsPerDay > 2 
+                                      ? () => setState(() => _mealsPerDay--) 
+                                      : null,
+                                  child: const Icon(LucideIcons.minus, size: 16),
+                                ),
+                                Container(
+                                  width: 80,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  child: Text(
+                                    '$_mealsPerDay',
+                                    style: theme.textTheme.h2,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                ShadButton.outline(
+                                  size: ShadButtonSize.sm,
+                                  onPressed: _mealsPerDay < 8 
+                                      ? () => setState(() => _mealsPerDay++) 
+                                      : null,
+                                  child: const Icon(LucideIcons.plus, size: 16),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            // Quick select buttons
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              alignment: WrapAlignment.center,
+                              children: [2, 3, 4, 5, 6].map((count) {
+                                final isSelected = _mealsPerDay == count;
+                                return ShadButton(
+                                  size: ShadButtonSize.sm,
+                                  onPressed: () => setState(() => _mealsPerDay = count),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (isSelected) ...[
+                                        const Icon(LucideIcons.check, size: 14),
+                                        const SizedBox(width: 4),
+                                      ],
+                                      Text('$count meals'),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
                             ),
                           ],
                         ),
