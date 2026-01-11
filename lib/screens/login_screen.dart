@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:ai_calorie_tracker/providers/user_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -12,7 +13,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey = GlobalKey<ShadFormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLogin = true;
@@ -26,7 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.saveAndValidate()) return;
 
     setState(() => _isLoading = true);
     final provider = Provider.of<UserProvider>(context, listen: false);
@@ -35,10 +36,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_useMagicLink) {
         await provider.signInWithMagicLink(_emailController.text.trim());
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Check your email for the login link! (Check Mailpit at http://127.0.0.1:54334)'),
-              duration: Duration(seconds: 5),
+          ShadToaster.of(context).show(
+            const ShadToast(
+              title: Text('Check your email!'),
+              description: Text('Login link sent. Check Mailpit at http://127.0.0.1:54334'),
             ),
           );
         }
@@ -53,17 +54,21 @@ class _LoginScreenState extends State<LoginScreen> {
           _passwordController.text.trim(),
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Account created! You can now log in.'),
+          ShadToaster.of(context).show(
+            const ShadToast(
+              title: Text('Account created!'),
+              description: Text('You can now log in.'),
             ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+        ShadToaster.of(context).show(
+          ShadToast.destructive(
+            title: const Text('Error'),
+            description: Text(e.toString()),
+          ),
         );
       }
     } finally {
@@ -77,8 +82,11 @@ class _LoginScreenState extends State<LoginScreen> {
       await Provider.of<UserProvider>(context, listen: false).signInWithGoogle();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Google Sign In failed: $e')),
+        ShadToaster.of(context).show(
+          ShadToast.destructive(
+            title: const Text('Google Sign In failed'),
+            description: Text(e.toString()),
+          ),
         );
       }
     } finally {
@@ -88,127 +96,175 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
+    
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Icon(Icons.eco, size: 80, color: Colors.green),
-                  const SizedBox(height: 16),
-                  Text(
-                    _isLogin ? 'Welcome Back' : 'Create Account',
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'AI Calorie Tracker',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 32),
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email_outlined),
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) => v!.contains('@') ? null : 'Invalid email',
-                  ),
-                  if (!_useMagicLink) ...[
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordController,
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: Icon(Icons.lock_outline),
-                        border: OutlineInputBorder(),
-                      ),
-                      obscureText: true,
-                      validator: (v) => v!.length < 6 ? 'Min 6 chars' : null,
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  if (_isLoading)
-                    const Center(child: CircularProgressIndicator())
-                  else
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        ElevatedButton(
-                          onPressed: _submit,
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 50),
-                            backgroundColor: Theme.of(context).colorScheme.primary,
-                            foregroundColor: Colors.white,
+      body: ShadToaster(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Logo and Header
+                    Center(
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              theme.colorScheme.primary,
+                              Color.lerp(theme.colorScheme.primary, Colors.white, 0.3)!,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          child: Text(_useMagicLink 
-                              ? 'Send Magic Link' 
-                              : (_isLogin ? 'Login' : 'Sign Up')),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        const SizedBox(height: 12),
-                        TextButton(
-                          onPressed: () => setState(() => _useMagicLink = !_useMagicLink),
-                          child: Text(_useMagicLink 
-                              ? 'Use password instead' 
-                              : 'Use magic link (passwordless)'),
+                        child: const Icon(
+                          LucideIcons.leaf,
+                          size: 40,
+                          color: Colors.white,
                         ),
-                        const SizedBox(height: 16),
-                        const Row(
-                          children: [
-                            Expanded(child: Divider()),
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16),
-                              child: Text('OR'),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      _isLogin ? 'Welcome Back' : 'Create Account',
+                      style: theme.textTheme.h2,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'AI Calorie Tracker',
+                      style: theme.textTheme.muted,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    
+                    // Form
+                    ShadForm(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ShadInputFormField(
+                            id: 'email',
+                            controller: _emailController,
+                            label: const Text('Email'),
+                            placeholder: const Text('you@example.com'),
+                            leading: const Icon(LucideIcons.mail, size: 16),
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (v) => v.contains('@') ? null : 'Enter a valid email',
+                          ),
+                          if (!_useMagicLink) ...[
+                            const SizedBox(height: 16),
+                            ShadInputFormField(
+                              id: 'password',
+                              controller: _passwordController,
+                              label: const Text('Password'),
+                              placeholder: const Text('Enter your password'),
+                              leading: const Icon(LucideIcons.lock, size: 16),
+                              obscureText: true,
+                              validator: (v) => v.length < 6 ? 'Min 6 characters' : null,
                             ),
-                            Expanded(child: Divider()),
                           ],
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    if (_isLoading)
+                      Center(
+                        child: SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: theme.colorScheme.primary,
+                          ),
                         ),
-                        const SizedBox(height: 16),
-                        if (_supportsSocialLogin) ...[
-                          OutlinedButton.icon(
-                            onPressed: _googleSignIn,
-                            icon: const Icon(Icons.g_mobiledata, size: 28), 
-                            label: const Text('Continue with Google'),
-                            style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
+                      )
+                    else
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ShadButton(
+                            onPressed: _submit,
+                            size: ShadButtonSize.lg,
+                            child: Text(_useMagicLink 
+                                ? 'Send Magic Link' 
+                                : (_isLogin ? 'Login' : 'Sign Up')),
                           ),
                           const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: () {
-                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Apple Sign In needs OAuth configuration')),
-                              );
-                            },
-                            icon: const Icon(Icons.apple, size: 28),
-                            label: const Text('Continue with Apple'),
-                            style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
+                          ShadButton.ghost(
+                            onPressed: () => setState(() => _useMagicLink = !_useMagicLink),
+                            child: Text(_useMagicLink 
+                                ? 'Use password instead' 
+                                : 'Use magic link (passwordless)'),
                           ),
-                        ] else
-                          const Center(
-                            child: Text(
-                              'Social Login available on Mobile & Web',
-                              style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                          const SizedBox(height: 24),
+                          
+                          Row(
+                            children: [
+                              const Expanded(child: Divider()),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text('OR', style: theme.textTheme.muted),
+                              ),
+                              const Expanded(child: Divider()),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 24),
+                          
+                          if (_supportsSocialLogin) ...[
+                            ShadButton.outline(
+                              onPressed: _googleSignIn,
+                              size: ShadButtonSize.lg,
+                              leading: const Icon(LucideIcons.globe, size: 20),
+                              child: const Text('Continue with Google'),
                             ),
-                          ),
-                      ],
-                    ),
-                  const SizedBox(height: 16),
-                  if (!_useMagicLink)
-                    TextButton(
-                      onPressed: () => setState(() => _isLogin = !_isLogin),
-                      child: Text(_isLogin
-                          ? 'Don\'t have an account? Sign Up'
-                          : 'Already have an account? Login'),
-                    ),
-                ],
+                            const SizedBox(height: 12),
+                            ShadButton.outline(
+                              onPressed: () {
+                                ShadToaster.of(context).show(
+                                  const ShadToast(
+                                    title: Text('Coming Soon'),
+                                    description: Text('Apple Sign In needs OAuth configuration'),
+                                  ),
+                                );
+                              },
+                              size: ShadButtonSize.lg,
+                              leading: const Icon(LucideIcons.apple, size: 20),
+                              child: const Text('Continue with Apple'),
+                            ),
+                          ] else
+                            Text(
+                              'Social Login available on Mobile & Web',
+                              style: theme.textTheme.muted,
+                              textAlign: TextAlign.center,
+                            ),
+                        ],
+                      ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    if (!_useMagicLink)
+                      ShadButton.link(
+                        onPressed: () => setState(() => _isLogin = !_isLogin),
+                        child: Text(_isLogin
+                            ? 'Don\'t have an account? Sign Up'
+                            : 'Already have an account? Login'),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

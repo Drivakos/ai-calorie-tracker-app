@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:uuid/uuid.dart';
 import 'package:ai_calorie_tracker/models/food_log.dart';
 import 'package:ai_calorie_tracker/providers/food_provider.dart';
@@ -12,7 +13,7 @@ class ManualEntryScreen extends StatefulWidget {
 }
 
 class _ManualEntryScreenState extends State<ManualEntryScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey = GlobalKey<ShadFormState>();
   final _nameController = TextEditingController();
   final _caloriesController = TextEditingController();
   final _weightController = TextEditingController();
@@ -21,7 +22,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
   final _fatController = TextEditingController();
 
   void _saveLog() {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState!.saveAndValidate()) {
       final log = FoodLog(
         id: const Uuid().v4(),
         name: _nameController.text,
@@ -31,7 +32,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
         carbs: double.tryParse(_carbsController.text) ?? 0,
         fat: double.tryParse(_fatController.text) ?? 0,
         timestamp: DateTime.now(),
-        mealType: 'Snack', // Default
+        mealType: 'Snack',
       );
 
       Provider.of<FoodProvider>(context, listen: false).addLog(log);
@@ -41,68 +42,86 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
+    
     return Scaffold(
-      appBar: AppBar(title: const Text('Manual Entry')),
+      appBar: AppBar(
+        backgroundColor: theme.colorScheme.background,
+        surfaceTintColor: Colors.transparent,
+        title: Text('Manual Entry', style: theme.textTheme.h4),
+        centerTitle: true,
+        leading: ShadButton.ghost(
+          size: ShadButtonSize.sm,
+          onPressed: () => Navigator.pop(context),
+          child: Icon(
+            LucideIcons.arrowLeft,
+            color: theme.colorScheme.foreground,
+          ),
+        ),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
-        child: Form(
+        child: ShadForm(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Card(
-                elevation: 0,
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              // Food Info Card
+              ShadCard(
+                title: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        LucideIcons.utensils,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Food Information'),
+                  ],
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.only(top: 16),
                   child: Column(
                     children: [
-                      TextFormField(
+                      ShadInputFormField(
+                        id: 'name',
                         controller: _nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Food Name',
-                          border: OutlineInputBorder(),
-                          filled: true,
-                          fillColor: Colors.white,
-                          prefixIcon: Icon(Icons.fastfood_outlined),
-                        ),
-                        textInputAction: TextInputAction.next,
-                        validator: (value) => value!.isEmpty ? 'Required' : null,
+                        label: const Text('Food Name'),
+                        placeholder: const Text('e.g., Grilled Chicken Breast'),
+                        leading: const Icon(LucideIcons.chefHat, size: 16),
+                        validator: (value) => value.isEmpty ? 'Required' : null,
                       ),
                       const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
-                            child: TextFormField(
+                            child: ShadInputFormField(
+                              id: 'calories',
                               controller: _caloriesController,
-                              decoration: const InputDecoration(
-                                labelText: 'Calories',
-                                border: OutlineInputBorder(),
-                                filled: true,
-                                fillColor: Colors.white,
-                                prefixIcon: Icon(Icons.local_fire_department_outlined),
-                                suffixText: 'kcal',
-                              ),
+                              label: const Text('Calories'),
+                              placeholder: const Text('kcal'),
+                              leading: const Icon(LucideIcons.flame, size: 16),
                               keyboardType: TextInputType.number,
-                              textInputAction: TextInputAction.next,
-                              validator: (value) => value!.isEmpty ? 'Required' : null,
+                              validator: (value) => value.isEmpty ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: TextFormField(
+                            child: ShadInputFormField(
+                              id: 'weight',
                               controller: _weightController,
-                              decoration: const InputDecoration(
-                                labelText: 'Weight',
-                                border: OutlineInputBorder(),
-                                filled: true,
-                                fillColor: Colors.white,
-                                prefixIcon: Icon(Icons.scale_outlined),
-                                suffixText: 'g',
-                              ),
+                              label: const Text('Weight'),
+                              placeholder: const Text('grams'),
+                              leading: const Icon(LucideIcons.scale, size: 16),
                               keyboardType: TextInputType.number,
-                              textInputAction: TextInputAction.next,
                             ),
                           ),
                         ],
@@ -112,45 +131,71 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
-                child: Text(
-                  'Macros',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              
+              // Macros Card
+              ShadCard(
+                title: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Color.lerp(const Color(0xFF3B82F6), Colors.white, 0.85),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        LucideIcons.chartPie,
+                        size: 18,
+                        color: Color(0xFF3B82F6),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Macronutrients'),
+                  ],
                 ),
-              ),
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                description: const Text('Optional - helps track your macros'),
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.only(top: 16),
                   child: Row(
                     children: [
                       Expanded(
-                        child: _buildMacroField(_proteinController, 'Protein', Colors.blue),
+                        child: _buildMacroInput(
+                          controller: _proteinController,
+                          label: 'Protein',
+                          color: const Color(0xFF3B82F6),
+                          theme: theme,
+                        ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 12),
                       Expanded(
-                        child: _buildMacroField(_carbsController, 'Carbs', Colors.orange),
+                        child: _buildMacroInput(
+                          controller: _carbsController,
+                          label: 'Carbs',
+                          color: const Color(0xFFF97316),
+                          theme: theme,
+                        ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 12),
                       Expanded(
-                        child: _buildMacroField(_fatController, 'Fat', Colors.red),
+                        child: _buildMacroInput(
+                          controller: _fatController,
+                          label: 'Fat',
+                          color: const Color(0xFFEF4444),
+                          theme: theme,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 32),
-              ElevatedButton(
+              
+              // Submit Button
+              ShadButton(
                 onPressed: _saveLog,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Add Entry', style: TextStyle(fontSize: 18)),
+                size: ShadButtonSize.lg,
+                leading: const Icon(LucideIcons.plus, size: 20),
+                child: const Text('Add Entry'),
               ),
             ],
           ),
@@ -159,22 +204,45 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     );
   }
 
-  Widget _buildMacroField(TextEditingController controller, String label, Color color) {
+  Widget _buildMacroInput({
+    required TextEditingController controller,
+    required String label,
+    required Color color,
+    required ShadThemeData theme,
+  }) {
     return Column(
       children: [
-        Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          textAlign: TextAlign.center,
-          decoration: const InputDecoration(
-            isDense: true,
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            suffixText: 'g',
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Color.lerp(color, Colors.white, 0.85),
+            borderRadius: BorderRadius.circular(10),
           ),
+          child: Center(
+            child: Text(
+              label[0],
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: theme.textTheme.small.copyWith(
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ShadInput(
+          controller: controller,
+          placeholder: const Text('0g'),
           keyboardType: TextInputType.number,
-          textInputAction: TextInputAction.next,
         ),
       ],
     );

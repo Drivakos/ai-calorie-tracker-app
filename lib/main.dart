@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ai_calorie_tracker/providers/food_provider.dart';
 import 'package:ai_calorie_tracker/providers/user_provider.dart';
@@ -41,16 +42,51 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => FoodProvider()),
       ],
-      child: MaterialApp(
+      child: ShadApp(
         title: 'AI Calorie Tracker',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-          useMaterial3: true,
+        themeMode: ThemeMode.system,
+        theme: ShadThemeData(
+          brightness: Brightness.light,
+          colorScheme: ShadColorScheme.fromName('green'),
+        ),
+        darkTheme: ShadThemeData(
+          brightness: Brightness.dark,
+          colorScheme: ShadColorScheme.fromName('green', brightness: Brightness.dark),
         ),
         home: supabaseInitialized 
           ? const AuthWrapper()
-          : const Scaffold(body: Center(child: Text('Supabase Configuration Error\n\nMake sure Supabase is running:\nnpx supabase start', textAlign: TextAlign.center))),
+          : const _ErrorScreen(),
+      ),
+    );
+  }
+}
+
+class _ErrorScreen extends StatelessWidget {
+  const _ErrorScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: ShadCard(
+            title: const Text('Configuration Error'),
+            description: const Text('Supabase is not configured properly.'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 16),
+                Text(
+                  'Make sure Supabase is running:\nnpx supabase start',
+                  textAlign: TextAlign.center,
+                  style: ShadTheme.of(context).textTheme.muted,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -62,16 +98,24 @@ class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context);
+    final theme = ShadTheme.of(context);
 
     if (userProvider.isLoading) {
-      return const Scaffold(
+      return Scaffold(
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Loading...'),
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('Loading...', style: theme.textTheme.muted),
             ],
           ),
         ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:ai_calorie_tracker/providers/user_provider.dart';
 import 'package:ai_calorie_tracker/models/user_profile.dart';
 
@@ -11,9 +12,9 @@ class ProfileSetupScreen extends StatefulWidget {
 }
 
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey = GlobalKey<ShadFormState>();
   final _heightController = TextEditingController();
-  final _heightInchesController = TextEditingController(); // For feet/inches
+  final _heightInchesController = TextEditingController();
   final _weightController = TextEditingController();
   final _ageController = TextEditingController();
   
@@ -28,29 +29,28 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final Set<String> _selectedAllergies = {};
   final Set<String> _selectedDietaryRestrictions = {};
   final List<String> _preferredFoods = [];
+  final List<String> _customAllergies = [];
   final _preferredFoodController = TextEditingController();
+  final _allergyController = TextEditingController();
 
   final List<String> _genders = ['Male', 'Female', 'Other'];
 
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.saveAndValidate()) return;
 
     setState(() => _isLoading = true);
     try {
-      // Calculate height based on unit
       double heightInCm;
       if (_selectedHeightUnit == HeightUnit.ft) {
         final feet = double.parse(_heightController.text);
         final inches = _heightInchesController.text.isNotEmpty 
             ? double.parse(_heightInchesController.text) 
             : 0.0;
-        // Convert feet + inches to cm directly
         heightInCm = (feet * 12 + inches) * 2.54;
       } else {
         heightInCm = double.parse(_heightController.text);
       }
 
-      // Convert weight to kg if needed
       double weightInKg = double.parse(_weightController.text);
       if (_selectedWeightUnit == WeightUnit.lbs) {
         weightInKg = _selectedWeightUnit.toKg(weightInKg);
@@ -69,11 +69,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         allergies: _selectedAllergies.toList(),
         dietaryRestrictions: _selectedDietaryRestrictions.toList(),
       );
-      // Navigation is handled by the wrapper in main.dart
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving profile: $e')),
+        ShadToaster.of(context).show(
+          ShadToast.destructive(
+            title: const Text('Error'),
+            description: Text('Error saving profile: $e'),
+          ),
         );
       }
     } finally {
@@ -88,617 +90,558 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     _weightController.dispose();
     _ageController.dispose();
     _preferredFoodController.dispose();
+    _allergyController.dispose();
     super.dispose();
+  }
+
+  void _addCustomAllergy() {
+    final allergy = _allergyController.text.trim();
+    if (allergy.isNotEmpty && !_customAllergies.contains(allergy) && !_selectedAllergies.contains(allergy)) {
+      setState(() {
+        _customAllergies.add(allergy);
+        _selectedAllergies.add(allergy);
+        _allergyController.clear();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = ShadTheme.of(context);
     
     return Scaffold(
-      appBar: AppBar(title: const Text('Setup Profile')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Tell us about yourself',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'This helps us calculate your daily calorie needs.',
-                style: TextStyle(color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              
-              // Gender Selector
-              DropdownButtonFormField<String>(
-                value: _selectedGender,
-                decoration: const InputDecoration(
-                  labelText: 'Gender',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-                items: _genders.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                onChanged: (v) => setState(() => _selectedGender = v!),
-              ),
-              const SizedBox(height: 16),
-
-              // Age
-              TextFormField(
-                controller: _ageController,
-                decoration: const InputDecoration(
-                  labelText: 'Age',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.cake_outlined),
-                ),
-                keyboardType: TextInputType.number,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  final age = int.tryParse(v);
-                  if (age == null || age < 1 || age > 120) return 'Enter a valid age';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-
-              // Unit Preferences Section
-              _buildSectionHeader('Measurement Units', Icons.straighten),
-              const SizedBox(height: 12),
-              
-              // Weight Unit Toggle
-              _buildUnitToggle(
-                label: 'Weight',
-                options: WeightUnit.values,
-                selectedValue: _selectedWeightUnit,
-                getLabel: (unit) => unit.label,
-                onChanged: (unit) => setState(() => _selectedWeightUnit = unit),
-              ),
-              const SizedBox(height: 12),
-              
-              // Height Unit Toggle
-              _buildUnitToggle(
-                label: 'Height',
-                options: HeightUnit.values,
-                selectedValue: _selectedHeightUnit,
-                getLabel: (unit) => unit.label,
-                onChanged: (unit) => setState(() {
-                  _selectedHeightUnit = unit;
-                  // Clear height fields when changing units
-                  _heightController.clear();
-                  _heightInchesController.clear();
-                }),
-              ),
-              const SizedBox(height: 24),
-
-              // Height Input
-              if (_selectedHeightUnit == HeightUnit.cm)
-                TextFormField(
-                  controller: _heightController,
-                  decoration: const InputDecoration(
-                    labelText: 'Height (cm)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.height),
-                    hintText: 'e.g., 175',
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Required';
-                    final height = double.tryParse(v);
-                    if (height == null || height < 50 || height > 300) {
-                      return 'Enter a valid height';
-                    }
-                    return null;
-                  },
-                )
-              else
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _heightController,
-                        decoration: const InputDecoration(
-                          labelText: 'Feet',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.height),
-                          hintText: 'e.g., 5',
-                        ),
-                        keyboardType: TextInputType.number,
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return 'Required';
-                          final feet = int.tryParse(v);
-                          if (feet == null || feet < 1 || feet > 8) {
-                            return 'Invalid';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _heightInchesController,
-                        decoration: const InputDecoration(
-                          labelText: 'Inches',
-                          border: OutlineInputBorder(),
-                          hintText: 'e.g., 10',
-                        ),
-                        keyboardType: TextInputType.number,
-                        validator: (v) {
-                          if (v != null && v.isNotEmpty) {
-                            final inches = double.tryParse(v);
-                            if (inches == null || inches < 0 || inches >= 12) {
-                              return 'Invalid';
-                            }
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 16),
-
-              // Weight Input
-              TextFormField(
-                controller: _weightController,
-                decoration: InputDecoration(
-                  labelText: 'Weight (${_selectedWeightUnit.label})',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.monitor_weight_outlined),
-                  hintText: _selectedWeightUnit == WeightUnit.kg ? 'e.g., 70' : 'e.g., 154',
-                ),
-                keyboardType: TextInputType.number,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  final weight = double.tryParse(v);
-                  if (weight == null) return 'Enter a valid weight';
-                  // Validate reasonable weight ranges
-                  if (_selectedWeightUnit == WeightUnit.kg) {
-                    if (weight < 20 || weight > 300) return 'Enter a valid weight';
-                  } else {
-                    if (weight < 44 || weight > 660) return 'Enter a valid weight';
-                  }
-                  return null;
-                },
-              ),
-              
-              const SizedBox(height: 32),
-
-              // Activity Level Section
-              _buildSectionHeader('Activity Level', Icons.directions_run),
-              const SizedBox(height: 8),
-              const Text(
-                'How active are you on a typical week?',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              
-              ...ActivityLevel.values.map((level) => _buildActivityOption(level, colorScheme)),
-
-              const SizedBox(height: 32),
-
-              // Calorie Goal Section
-              _buildSectionHeader('Your Goal', Icons.flag_outlined),
-              const SizedBox(height: 8),
-              const Text(
-                'What do you want to achieve?',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              
-              ...CalorieGoal.values.map((goal) => _buildGoalOption(goal, colorScheme)),
-
-              const SizedBox(height: 32),
-
-              // Dietary Restrictions Section
-              _buildSectionHeader('Dietary Restrictions', Icons.restaurant_menu),
-              const SizedBox(height: 8),
-              const Text(
-                'Select any dietary restrictions you follow (optional)',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              _buildChipSelector(
-                items: DietaryRestriction.allRestrictions,
-                selectedItems: _selectedDietaryRestrictions,
-                colorScheme: colorScheme,
-              ),
-
-              const SizedBox(height: 32),
-
-              // Allergies Section
-              _buildSectionHeader('Food Allergies', Icons.warning_amber_outlined),
-              const SizedBox(height: 8),
-              const Text(
-                'Select any food allergies (important for AI recommendations)',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              _buildChipSelector(
-                items: FoodAllergy.allAllergies,
-                selectedItems: _selectedAllergies,
-                colorScheme: colorScheme,
-                isAllergy: true,
-              ),
-
-              const SizedBox(height: 32),
-
-              // Preferred Foods Section
-              _buildSectionHeader('Preferred Foods', Icons.favorite_outline),
-              const SizedBox(height: 8),
-              const Text(
-                'Add foods you enjoy eating (optional, helps with AI meal suggestions)',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              _buildPreferredFoodsInput(colorScheme),
-
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _saveProfile,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: Colors.white,
-                ),
-                child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Complete Setup'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUnitToggle<T>({
-    required String label,
-    required List<T> options,
-    required T selectedValue,
-    required String Function(T) getLabel,
-    required ValueChanged<T> onChanged,
-  }) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 80,
-          child: Text(
-            label,
-            style: const TextStyle(fontSize: 14),
-          ),
-        ),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: options.map((option) {
-                final isSelected = option == selectedValue;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => onChanged(option),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isSelected 
-                            ? Theme.of(context).colorScheme.primary 
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        getLabel(option),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: isSelected 
-                              ? Colors.white 
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActivityOption(ActivityLevel level, ColorScheme colorScheme) {
-    final isSelected = _selectedActivityLevel == level;
-    
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: () => setState(() => _selectedActivityLevel = level),
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isSelected 
-                ? colorScheme.primaryContainer 
-                : colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? colorScheme.primary : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isSelected ? colorScheme.primary : Colors.transparent,
-                  border: Border.all(
-                    color: isSelected ? colorScheme.primary : colorScheme.outline,
-                    width: 2,
-                  ),
-                ),
-                child: isSelected 
-                    ? const Icon(Icons.check, size: 16, color: Colors.white)
-                    : null,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
+      body: ShadToaster(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: ShadForm(
+                key: _formKey,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      level.label,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: isSelected 
-                            ? colorScheme.onPrimaryContainer 
-                            : colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      level.description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isSelected 
-                            ? colorScheme.onPrimaryContainer.withOpacity(0.8) 
-                            : colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGoalOption(CalorieGoal goal, ColorScheme colorScheme) {
-    final isSelected = _selectedCalorieGoal == goal;
-    final adjustment = goal.calorieAdjustment;
-    final adjustmentText = adjustment == 0 
-        ? 'Maintenance' 
-        : '${adjustment > 0 ? '+' : ''}$adjustment cal';
-    
-    // Color coding for goals
-    final goalColor = switch (goal) {
-      CalorieGoal.aggressiveCut => Colors.red,
-      CalorieGoal.moderateCut => Colors.orange,
-      CalorieGoal.mildCut => Colors.amber,
-      CalorieGoal.maintain => Colors.green,
-      CalorieGoal.mildBulk => Colors.lightBlue,
-      CalorieGoal.moderateBulk => Colors.blue,
-      CalorieGoal.aggressiveBulk => Colors.indigo,
-    };
-    
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: () => setState(() => _selectedCalorieGoal = goal),
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isSelected 
-                ? colorScheme.primaryContainer 
-                : colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? colorScheme.primary : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isSelected ? colorScheme.primary : Colors.transparent,
-                  border: Border.all(
-                    color: isSelected ? colorScheme.primary : colorScheme.outline,
-                    width: 2,
-                  ),
-                ),
-                child: isSelected 
-                    ? const Icon(Icons.check, size: 16, color: Colors.white)
-                    : null,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          goal.label,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isSelected 
-                                ? colorScheme.onPrimaryContainer 
-                                : colorScheme.onSurface,
+                    // Header
+                    Center(
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              theme.colorScheme.primary,
+                              Color.lerp(theme.colorScheme.primary, Colors.white, 0.3)!,
+                            ],
                           ),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: goalColor.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            adjustmentText,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: goalColor,
+                        child: const Icon(
+                          LucideIcons.userCog,
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Tell us about yourself',
+                      style: theme.textTheme.h2,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'This helps us calculate your daily calorie needs.',
+                      style: theme.textTheme.muted,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    
+                    // Basic Info Card
+                    ShadCard(
+                      title: Row(
+                        children: [
+                          Icon(LucideIcons.user, size: 18, color: theme.colorScheme.primary),
+                          const SizedBox(width: 8),
+                          const Text('Basic Information'),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Column(
+                          children: [
+                            // Gender Select
+                            ShadSelect<String>(
+                              placeholder: const Text('Select gender'),
+                              initialValue: _selectedGender,
+                              options: _genders
+                                  .map((g) => ShadOption(value: g, child: Text(g)))
+                                  .toList(),
+                              selectedOptionBuilder: (context, value) => Text(value),
+                              onChanged: (v) => setState(() => _selectedGender = v ?? 'Male'),
                             ),
-                          ),
+                            const SizedBox(height: 16),
+                            
+                            // Age
+                            ShadInputFormField(
+                              id: 'age',
+                              controller: _ageController,
+                              label: const Text('Age'),
+                              placeholder: const Text('Enter your age'),
+                              leading: const Icon(LucideIcons.cake, size: 16),
+                              keyboardType: TextInputType.number,
+                              validator: (v) {
+                                if (v.isEmpty) return 'Required';
+                                final age = int.tryParse(v);
+                                if (age == null || age < 1 || age > 120) {
+                                  return 'Enter a valid age';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      goal.description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isSelected 
-                            ? colorScheme.onPrimaryContainer.withOpacity(0.8) 
-                            : colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    const SizedBox(height: 24),
+
+                    // Measurements Card
+                    ShadCard(
+                      title: Row(
+                        children: [
+                          Icon(LucideIcons.ruler, size: 18, color: theme.colorScheme.primary),
+                          const SizedBox(width: 8),
+                          const Text('Measurements'),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Weight Unit Toggle
+                            Text('Weight Unit', style: theme.textTheme.small),
+                            const SizedBox(height: 8),
+                            ShadTabs<WeightUnit>(
+                              value: _selectedWeightUnit,
+                              onChanged: (v) => setState(() => _selectedWeightUnit = v),
+                              tabs: WeightUnit.values.map((unit) => ShadTab(
+                                value: unit,
+                                content: const SizedBox.shrink(),
+                                child: Text(unit.label),
+                              )).toList(),
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            // Height Unit Toggle
+                            Text('Height Unit', style: theme.textTheme.small),
+                            const SizedBox(height: 8),
+                            ShadTabs<HeightUnit>(
+                              value: _selectedHeightUnit,
+                              onChanged: (v) {
+                                setState(() {
+                                  _selectedHeightUnit = v;
+                                  _heightController.clear();
+                                  _heightInchesController.clear();
+                                });
+                              },
+                              tabs: HeightUnit.values.map((unit) => ShadTab(
+                                value: unit,
+                                content: const SizedBox.shrink(),
+                                child: Text(unit.label),
+                              )).toList(),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Height Input
+                            if (_selectedHeightUnit == HeightUnit.cm)
+                              ShadInputFormField(
+                                id: 'height_cm',
+                                controller: _heightController,
+                                label: const Text('Height (cm)'),
+                                placeholder: const Text('e.g., 175'),
+                                leading: const Icon(LucideIcons.moveVertical, size: 16),
+                                keyboardType: TextInputType.number,
+                                validator: (v) {
+                                  if (v.isEmpty) return 'Required';
+                                  final height = double.tryParse(v);
+                                  if (height == null || height < 50 || height > 300) {
+                                    return 'Enter a valid height';
+                                  }
+                                  return null;
+                                },
+                              )
+                            else
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ShadInputFormField(
+                                      id: 'height_feet',
+                                      controller: _heightController,
+                                      label: const Text('Feet'),
+                                      placeholder: const Text('5'),
+                                      keyboardType: TextInputType.number,
+                                      validator: (v) {
+                                        if (v.isEmpty) return 'Required';
+                                        final feet = int.tryParse(v);
+                                        if (feet == null || feet < 1 || feet > 8) {
+                                          return 'Invalid';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: ShadInputFormField(
+                                      id: 'height_inches',
+                                      controller: _heightInchesController,
+                                      label: const Text('Inches'),
+                                      placeholder: const Text('10'),
+                                      keyboardType: TextInputType.number,
+                                      validator: (v) {
+                                        if (v.isNotEmpty) {
+                                          final inches = double.tryParse(v);
+                                          if (inches == null || inches < 0 || inches >= 12) {
+                                            return 'Invalid';
+                                          }
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            const SizedBox(height: 16),
+
+                            // Weight Input
+                            ShadInputFormField(
+                              id: 'weight',
+                              controller: _weightController,
+                              label: Text('Weight (${_selectedWeightUnit.label})'),
+                              placeholder: Text(_selectedWeightUnit == WeightUnit.kg ? 'e.g., 70' : 'e.g., 154'),
+                              leading: const Icon(LucideIcons.scale, size: 16),
+                              keyboardType: TextInputType.number,
+                              validator: (v) {
+                                if (v.isEmpty) return 'Required';
+                                final weight = double.tryParse(v);
+                                if (weight == null) return 'Enter a valid weight';
+                                if (_selectedWeightUnit == WeightUnit.kg) {
+                                  if (weight < 20 || weight > 300) return 'Enter a valid weight';
+                                } else {
+                                  if (weight < 44 || weight > 660) return 'Enter a valid weight';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Activity Level Card
+                    ShadCard(
+                      title: Row(
+                        children: [
+                          Icon(LucideIcons.activity, size: 18, color: theme.colorScheme.primary),
+                          const SizedBox(width: 8),
+                          const Text('Activity Level'),
+                        ],
+                      ),
+                      description: const Text('How active are you on a typical week?'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: ShadRadioGroup<ActivityLevel>(
+                          initialValue: _selectedActivityLevel,
+                          onChanged: (v) {
+                            if (v != null) setState(() => _selectedActivityLevel = v);
+                          },
+                          items: ActivityLevel.values.map((level) => ShadRadio(
+                            value: level,
+                            label: Text(level.label),
+                            sublabel: Text(level.description),
+                          )).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Calorie Goal Card
+                    ShadCard(
+                      title: Row(
+                        children: [
+                          Icon(LucideIcons.target, size: 18, color: theme.colorScheme.primary),
+                          const SizedBox(width: 8),
+                          const Text('Your Goal'),
+                        ],
+                      ),
+                      description: const Text('What do you want to achieve?'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: ShadRadioGroup<CalorieGoal>(
+                          initialValue: _selectedCalorieGoal,
+                          onChanged: (v) {
+                            if (v != null) setState(() => _selectedCalorieGoal = v);
+                          },
+                          items: CalorieGoal.values.map((goal) {
+                            final adjustment = goal.calorieAdjustment;
+                            final adjustmentText = adjustment == 0 
+                                ? 'Maintenance' 
+                                : '${adjustment > 0 ? '+' : ''}$adjustment cal';
+                            return ShadRadio(
+                              value: goal,
+                              label: Row(
+                                children: [
+                                  Text(goal.label),
+                                  const SizedBox(width: 8),
+                                  ShadBadge.outline(
+                                    child: Text(adjustmentText),
+                                  ),
+                                ],
+                              ),
+                              sublabel: Text(goal.description),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Dietary Restrictions Card
+                    ShadCard(
+                      title: Row(
+                        children: [
+                          Icon(LucideIcons.utensils, size: 18, color: theme.colorScheme.primary),
+                          const SizedBox(width: 8),
+                          const Text('Dietary Restrictions'),
+                        ],
+                      ),
+                      description: const Text('Select any dietary restrictions you follow (optional)'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: DietaryRestriction.allRestrictions.map((item) {
+                            final isSelected = _selectedDietaryRestrictions.contains(item);
+                            return ShadButton(
+                              size: ShadButtonSize.sm,
+                              onPressed: () {
+                                setState(() {
+                                  if (isSelected) {
+                                    _selectedDietaryRestrictions.remove(item);
+                                  } else {
+                                    _selectedDietaryRestrictions.add(item);
+                                  }
+                                });
+                              },
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (isSelected) ...[
+                                    const Icon(LucideIcons.check, size: 14),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  Text(item),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Allergies Card
+                    ShadCard(
+                      title: Row(
+                        children: [
+                          Icon(LucideIcons.triangleAlert, size: 18, color: theme.colorScheme.destructive),
+                          const SizedBox(width: 8),
+                          const Expanded(child: Text('Food Allergies')),
+                        ],
+                      ),
+                      description: const Text('Select common allergies or add your own'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Custom allergy input
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ShadInput(
+                                    controller: _allergyController,
+                                    placeholder: const Text('Add custom allergy...'),
+                                    onSubmitted: (_) => _addCustomAllergy(),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                ShadButton.destructive(
+                                  size: ShadButtonSize.sm,
+                                  onPressed: _addCustomAllergy,
+                                  child: const Icon(LucideIcons.plus, size: 16),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            // Custom allergies badges
+                            if (_customAllergies.isNotEmpty) ...[
+                              Text('Your allergies', style: theme.textTheme.small),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _customAllergies.map((allergy) {
+                                  return ShadBadge.destructive(
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(allergy),
+                                        const SizedBox(width: 4),
+                                        GestureDetector(
+                                          onTap: () => setState(() {
+                                            _customAllergies.remove(allergy);
+                                            _selectedAllergies.remove(allergy);
+                                          }),
+                                          child: const Icon(LucideIcons.x, size: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                            
+                            // Common allergies
+                            Text('Common allergies', style: theme.textTheme.small),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: FoodAllergy.allAllergies.map((item) {
+                                final isSelected = _selectedAllergies.contains(item);
+                                return ShadButton(
+                                  size: ShadButtonSize.sm,
+                                  onPressed: () {
+                                    setState(() {
+                                      if (isSelected) {
+                                        _selectedAllergies.remove(item);
+                                      } else {
+                                        _selectedAllergies.add(item);
+                                      }
+                                    });
+                                  },
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (isSelected) ...[
+                                        Icon(LucideIcons.check, size: 14, color: theme.colorScheme.destructive),
+                                        const SizedBox(width: 4),
+                                      ],
+                                      Text(
+                                        item,
+                                        style: isSelected 
+                                            ? TextStyle(color: theme.colorScheme.destructive)
+                                            : null,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Preferred Foods Card
+                    ShadCard(
+                      title: Row(
+                        children: [
+                          Icon(LucideIcons.heart, size: 18, color: theme.colorScheme.primary),
+                          const SizedBox(width: 8),
+                          const Text('Preferred Foods'),
+                        ],
+                      ),
+                      description: const Text('Add foods you enjoy eating (optional, helps with AI meal suggestions)'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ShadInput(
+                                    controller: _preferredFoodController,
+                                    placeholder: const Text('e.g., Chicken, Rice...'),
+                                    onSubmitted: (_) => _addPreferredFood(),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                ShadButton.outline(
+                                  size: ShadButtonSize.sm,
+                                  onPressed: _addPreferredFood,
+                                  child: const Icon(LucideIcons.plus, size: 16),
+                                ),
+                              ],
+                            ),
+                            if (_preferredFoods.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _preferredFoods.map((food) {
+                                  return ShadBadge(
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(food),
+                                        const SizedBox(width: 4),
+                                        GestureDetector(
+                                          onTap: () => setState(() => _preferredFoods.remove(food)),
+                                          child: const Icon(LucideIcons.x, size: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Submit Button
+                    ShadButton(
+                      onPressed: _isLoading ? null : _saveProfile,
+                      size: ShadButtonSize.lg,
+                      child: _isLoading 
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: theme.colorScheme.primaryForeground,
+                              ),
+                            )
+                          : const Text('Complete Setup'),
+                    ),
+                    const SizedBox(height: 32),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildChipSelector({
-    required List<String> items,
-    required Set<String> selectedItems,
-    required ColorScheme colorScheme,
-    bool isAllergy = false,
-  }) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: items.map((item) {
-        final isSelected = selectedItems.contains(item);
-        return FilterChip(
-          label: Text(item),
-          selected: isSelected,
-          onSelected: (selected) {
-            setState(() {
-              if (selected) {
-                selectedItems.add(item);
-              } else {
-                selectedItems.remove(item);
-              }
-            });
-          },
-          selectedColor: isAllergy 
-              ? Colors.red.withOpacity(0.2) 
-              : colorScheme.primaryContainer,
-          checkmarkColor: isAllergy ? Colors.red : colorScheme.primary,
-          labelStyle: TextStyle(
-            color: isSelected 
-                ? (isAllergy ? Colors.red : colorScheme.onPrimaryContainer)
-                : colorScheme.onSurfaceVariant,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-          side: BorderSide(
-            color: isSelected 
-                ? (isAllergy ? Colors.red : colorScheme.primary)
-                : colorScheme.outline.withOpacity(0.5),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildPreferredFoodsInput(ColorScheme colorScheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _preferredFoodController,
-                decoration: InputDecoration(
-                  hintText: 'e.g., Chicken, Rice, Broccoli...',
-                  border: const OutlineInputBorder(),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.add_circle_outline),
-                    onPressed: _addPreferredFood,
-                  ),
-                ),
-                onSubmitted: (_) => _addPreferredFood(),
-              ),
-            ),
-          ],
-        ),
-        if (_preferredFoods.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _preferredFoods.map((food) {
-              return Chip(
-                label: Text(food),
-                deleteIcon: const Icon(Icons.close, size: 18),
-                onDeleted: () {
-                  setState(() {
-                    _preferredFoods.remove(food);
-                  });
-                },
-                backgroundColor: colorScheme.primaryContainer.withOpacity(0.5),
-                labelStyle: TextStyle(color: colorScheme.onPrimaryContainer),
-              );
-            }).toList(),
-          ),
-        ],
-      ],
     );
   }
 
