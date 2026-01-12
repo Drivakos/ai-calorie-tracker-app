@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:ai_calorie_tracker/providers/food_provider.dart';
-import 'package:ai_calorie_tracker/screens/manual_entry_screen.dart';
-import 'package:ai_calorie_tracker/screens/analysis_screen.dart';
 import 'package:ai_calorie_tracker/screens/profile_screen.dart';
+import 'package:ai_calorie_tracker/screens/diet_plan_screen.dart';
+import 'package:ai_calorie_tracker/screens/smart_entry_screen.dart';
 import 'package:ai_calorie_tracker/providers/user_provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -26,20 +25,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  Future<void> _pickImage(BuildContext context, ImageSource source) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
-
-    if (pickedFile != null && context.mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AnalysisScreen(imagePath: pickedFile.path),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final foodProvider = Provider.of<FoodProvider>(context);
@@ -58,6 +43,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               backgroundColor: theme.colorScheme.background,
               surfaceTintColor: Colors.transparent,
               actions: [
+                ShadButton.ghost(
+                  size: ShadButtonSize.sm,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const DietPlanScreen()),
+                    );
+                  },
+                  child: Icon(
+                    LucideIcons.calendarDays,
+                    size: 20,
+                    color: theme.colorScheme.foreground,
+                  ),
+                ),
                 ShadButton.ghost(
                   size: ShadButtonSize.sm,
                   onPressed: () {
@@ -205,136 +204,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
       floatingActionButton: ShadButton(
-        onPressed: () => _showAddOptions(context),
-        leading: const Icon(LucideIcons.plus, size: 20),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SmartEntryScreen()),
+          );
+        },
+        leading: const Icon(LucideIcons.sparkles, size: 20),
         child: const Text('Add Food'),
-      ),
-    );
-  }
-
-  void _showAddOptions(BuildContext context) {
-    final theme = ShadTheme.of(context);
-    
-    showShadSheet(
-      side: ShadSheetSide.bottom,
-      context: context,
-      builder: (context) {
-        return ShadSheet(
-          title: const Text('Add Food'),
-          description: const Text('Choose how you want to log your meal'),
-          child: Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildOptionTile(
-                  context,
-                  theme,
-                  icon: LucideIcons.camera,
-                  label: 'Take Photo',
-                  subtitle: 'Capture and analyze your meal',
-                  color: const Color(0xFF3B82F6),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickImage(context, ImageSource.camera);
-                  },
-                ),
-                const SizedBox(height: 12),
-                _buildOptionTile(
-                  context,
-                  theme,
-                  icon: LucideIcons.image,
-                  label: 'Gallery',
-                  subtitle: 'Select a photo from your gallery',
-                  color: const Color(0xFF8B5CF6),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _pickImage(context, ImageSource.gallery);
-                  },
-                ),
-                const SizedBox(height: 12),
-                _buildOptionTile(
-                  context,
-                  theme,
-                  icon: LucideIcons.pencil,
-                  label: 'Manual Entry',
-                  subtitle: 'Enter nutrition info manually',
-                  color: theme.colorScheme.primary,
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const ManualEntryScreen()),
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildOptionTile(
-    BuildContext context,
-    ShadThemeData theme, {
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            border: Border.all(color: theme.colorScheme.border),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Color.lerp(color, Colors.white, 0.85),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: theme.textTheme.p.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.muted,
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                LucideIcons.chevronRight,
-                size: 20,
-                color: theme.colorScheme.mutedForeground,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

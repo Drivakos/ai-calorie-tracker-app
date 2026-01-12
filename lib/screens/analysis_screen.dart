@@ -4,8 +4,11 @@ import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:uuid/uuid.dart';
 import 'package:ai_calorie_tracker/models/food_log.dart';
+import 'package:ai_calorie_tracker/models/parsed_food.dart';
 import 'package:ai_calorie_tracker/providers/food_provider.dart';
 import 'package:ai_calorie_tracker/services/gemini_service.dart';
+import 'package:ai_calorie_tracker/services/usda_service.dart';
+import 'package:ai_calorie_tracker/widgets/usda_search_sheet.dart';
 
 class AnalysisScreen extends StatefulWidget {
   final String imagePath;
@@ -18,20 +21,26 @@ class AnalysisScreen extends StatefulWidget {
 
 class _AnalysisScreenState extends State<AnalysisScreen> {
   final GeminiService _geminiService = GeminiService();
+  final UsdaService _usdaService = UsdaService();
   bool _isLoading = true;
-  List<FoodAnalysisItem> _items = [];
+  List<ParsedFoodItem> _items = [];
+  String? _selectedMealType;
+
+  final List<String> _mealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
   @override
   void initState() {
     super.initState();
+    _selectedMealType = 'Snack';
     _analyzeImage();
   }
 
   Future<void> _analyzeImage() async {
     try {
-      final results = await _geminiService.analyzeFoodImage(widget.imagePath);
+      // Use the new structured analysis with USDA enrichment
+      final results = await _geminiService.analyzeFoodImageStructured(widget.imagePath);
       setState(() {
-        _items = results.map((data) => FoodAnalysisItem(data)).toList();
+        _items = results;
         _isLoading = false;
       });
     } catch (e) {
@@ -47,19 +56,100 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     }
   }
 
+  void _removeItem(int index) {
+    setState(() {
+      _items.removeAt(index);
+    });
+  }
+
+  Future<void> _searchUsdaForItem(int index) async {
+    final item = _items[index];
+    final result = await UsdaSearchSheet.show(
+      context,
+      initialQuery: item.aiGuessedName,
+    );
+
+    if (result != null) {
+      final macros = result.calculateForPortion(item.estimatedGrams);
+      final updatedItem = item.withUsdaData(
+        fdcId: result.fdcId,
+        foodName: result.description,
+        brandName: result.brandName,
+        calories: macros['calories'] ?? 0,
+        protein: macros['protein'] ?? 0,
+        carbs: macros['carbs'] ?? 0,
+        fat: macros['fat'] ?? 0,
+        fiber: macros['fiber'],
+        sodium: macros['sodium'],
+        sugar: macros['sugar'],
+      );
+
+      setState(() {
+        _items[index] = updatedItem;
+      });
+    }
+  }
+
+  void _updateItemGrams(int index, double newGrams) {
+    final item = _items[index];
+    
+    if (item.isFromUsda && item.usdaFdcId != null) {
+      _usdaService.getFoodById(item.usdaFdcId!).then((usdaFood) {
+        if (usdaFood != null && mounted) {
+          setState(() {
+            _items[index] = item.withUpdatedPortion(
+              newGrams: newGrams,
+              caloriesPer100g: usdaFood.caloriesPer100g,
+              proteinPer100g: usdaFood.proteinPer100g,
+              carbsPer100g: usdaFood.carbsPer100g,
+              fatPer100g: usdaFood.fatPer100g,
+              fiberPer100g: usdaFood.fiberPer100g,
+              sodiumPer100g: usdaFood.sodiumPer100g,
+              sugarPer100g: usdaFood.sugarPer100g,
+            );
+          });
+        }
+      });
+    } else {
+      final ratio = newGrams / (item.estimatedGrams == 0 ? 100 : item.estimatedGrams);
+      setState(() {
+        _items[index] = ParsedFoodItem(
+          id: item.id,
+          aiGuessedName: item.aiGuessedName,
+          estimatedQuantity: item.estimatedQuantity,
+          estimatedUnit: item.estimatedUnit,
+          estimatedGrams: newGrams,
+          usdaFdcId: item.usdaFdcId,
+          usdaFoodName: item.usdaFoodName,
+          usdaBrandName: item.usdaBrandName,
+          calories: item.calories * ratio,
+          protein: item.protein * ratio,
+          carbs: item.carbs * ratio,
+          fat: item.fat * ratio,
+          fiber: item.fiber != null ? item.fiber! * ratio : null,
+          sodium: item.sodium != null ? item.sodium! * ratio : null,
+          sugar: item.sugar != null ? item.sugar! * ratio : null,
+          aiConfidence: item.aiConfidence,
+          isVerified: item.isVerified,
+          isFromUsda: item.isFromUsda,
+        );
+      });
+    }
+  }
+
   void _saveLogs() {
     final provider = Provider.of<FoodProvider>(context, listen: false);
     for (var item in _items) {
       final log = FoodLog(
         id: const Uuid().v4(),
-        name: item.nameController.text,
-        weightGrams: double.tryParse(item.weightController.text) ?? 0,
-        calories: item.currentCalories,
-        protein: item.currentProtein,
-        carbs: item.currentCarbs,
-        fat: item.currentFat,
+        name: item.displayName,
+        weightGrams: item.estimatedGrams,
+        calories: item.calories,
+        protein: item.protein,
+        carbs: item.carbs,
+        fat: item.fat,
         timestamp: DateTime.now(),
-        mealType: 'Snack',
+        mealType: _selectedMealType ?? 'Snack',
         imagePath: widget.imagePath,
       );
       provider.addLog(log);
@@ -100,7 +190,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                     Text('Analyzing your meal...', style: theme.textTheme.large),
                     const SizedBox(height: 8),
                     Text(
-                      'AI is identifying food items',
+                      'AI + USDA for accurate nutrition',
                       style: theme.textTheme.muted,
                     ),
                   ],
@@ -188,7 +278,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                           ),
                                           const SizedBox(width: 6),
                                           Text(
-                                            'AI Analysis',
+                                            'AI + USDA',
                                             style: theme.textTheme.small.copyWith(
                                               color: Colors.white,
                                               fontWeight: FontWeight.w600,
@@ -201,6 +291,18 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                                     ShadBadge.secondary(
                                       child: Text('${_items.length} items found'),
                                     ),
+                                    const SizedBox(width: 8),
+                                    if (_items.any((i) => i.isFromUsda))
+                                      ShadBadge(
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(LucideIcons.circleCheck, size: 10),
+                                            const SizedBox(width: 4),
+                                            Text('${_items.where((i) => i.isFromUsda).length} verified'),
+                                          ],
+                                        ),
+                                      ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
@@ -218,6 +320,29 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                     ),
                   ),
                   
+                  // Meal Type Selector
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          Text('Meal: ', style: theme.textTheme.p),
+                          const SizedBox(width: 8),
+                          ShadSelect<String>(
+                            placeholder: const Text('Select meal'),
+                            options: _mealTypes.map((type) => ShadOption(
+                              value: type,
+                              child: Text(type),
+                            )).toList(),
+                            selectedOptionBuilder: (context, value) => Text(value),
+                            onChanged: (value) => setState(() => _selectedMealType = value),
+                            initialValue: _selectedMealType,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
                   // Food Items
                   SliverPadding(
                     padding: const EdgeInsets.all(16).copyWith(bottom: 120),
@@ -226,11 +351,12 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                         (context, index) {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 16),
-                            child: FoodItemEditor(
+                            child: _FoodItemCard(
                               item: _items[index],
                               theme: theme,
-                              onUpdate: () => setState(() {}),
-                              onDelete: () => setState(() => _items.removeAt(index)),
+                              onRemove: () => _removeItem(index),
+                              onSearchUsda: () => _searchUsdaForItem(index),
+                              onGramsChanged: (grams) => _updateItemGrams(index, grams),
                             ),
                           );
                         },
@@ -261,34 +387,41 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                     if (_items.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildTotalStat(
-                              'Calories',
-                              '${_items.fold<double>(0, (sum, item) => sum + item.currentCalories).toInt()}',
-                              'kcal',
-                              theme,
-                            ),
-                            _buildTotalStat(
-                              'Protein',
-                              '${_items.fold<double>(0, (sum, item) => sum + item.currentProtein).toInt()}',
-                              'g',
-                              theme,
-                            ),
-                            _buildTotalStat(
-                              'Carbs',
-                              '${_items.fold<double>(0, (sum, item) => sum + item.currentCarbs).toInt()}',
-                              'g',
-                              theme,
-                            ),
-                            _buildTotalStat(
-                              'Fat',
-                              '${_items.fold<double>(0, (sum, item) => sum + item.currentFat).toInt()}',
-                              'g',
-                              theme,
-                            ),
-                          ],
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.92),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildTotalStat(
+                                'Calories',
+                                '${_items.fold<double>(0, (sum, item) => sum + item.calories).toInt()}',
+                                'kcal',
+                                theme,
+                              ),
+                              _buildTotalStat(
+                                'Protein',
+                                '${_items.fold<double>(0, (sum, item) => sum + item.protein).toInt()}',
+                                'g',
+                                theme,
+                              ),
+                              _buildTotalStat(
+                                'Carbs',
+                                '${_items.fold<double>(0, (sum, item) => sum + item.carbs).toInt()}',
+                                'g',
+                                theme,
+                              ),
+                              _buildTotalStat(
+                                'Fat',
+                                '${_items.fold<double>(0, (sum, item) => sum + item.fat).toInt()}',
+                                'g',
+                                theme,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ShadButton(
@@ -296,7 +429,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                       size: ShadButtonSize.lg,
                       width: double.infinity,
                       leading: const Icon(LucideIcons.check, size: 20),
-                      child: Text(_items.isEmpty ? 'No items to save' : 'Save Entries'),
+                      child: Text(_items.isEmpty ? 'No items to save' : 'Save ${_items.length} ${_items.length == 1 ? 'Item' : 'Items'}'),
                     ),
                   ],
                 ),
@@ -309,8 +442,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   Widget _buildTotalStat(String label, String value, String unit, ShadThemeData theme) {
     return Column(
       children: [
-        Text(label, style: theme.textTheme.muted),
-        const SizedBox(height: 4),
+        Text(label, style: theme.textTheme.muted.copyWith(fontSize: 11)),
+        const SizedBox(height: 2),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -320,7 +453,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            Text(unit, style: theme.textTheme.muted),
+            Text(unit, style: theme.textTheme.muted.copyWith(fontSize: 11)),
           ],
         ),
       ],
@@ -328,159 +461,219 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   }
 }
 
-class FoodAnalysisItem {
-  final String originalName;
-  final double baseWeight;
-  final double baseCalories;
-  final double baseProtein;
-  final double baseCarbs;
-  final double baseFat;
-
-  late TextEditingController nameController;
-  late TextEditingController weightController;
-
-  FoodAnalysisItem(Map<String, dynamic> data)
-      : originalName = data['name'],
-        baseWeight = (data['weight_grams'] as num).toDouble(),
-        baseCalories = (data['calories'] as num).toDouble(),
-        baseProtein = (data['protein_g'] as num).toDouble(),
-        baseCarbs = (data['carbs_g'] as num).toDouble(),
-        baseFat = (data['fat_g'] as num).toDouble() {
-    nameController = TextEditingController(text: originalName);
-    weightController = TextEditingController(text: baseWeight.toStringAsFixed(0));
-  }
-
-  double get currentWeight => double.tryParse(weightController.text) ?? baseWeight;
-  double get ratio => currentWeight / (baseWeight == 0 ? 1 : baseWeight);
-
-  double get currentCalories => baseCalories * ratio;
-  double get currentProtein => baseProtein * ratio;
-  double get currentCarbs => baseCarbs * ratio;
-  double get currentFat => baseFat * ratio;
-}
-
-class FoodItemEditor extends StatelessWidget {
-  final FoodAnalysisItem item;
+class _FoodItemCard extends StatefulWidget {
+  final ParsedFoodItem item;
   final ShadThemeData theme;
-  final VoidCallback onUpdate;
-  final VoidCallback onDelete;
+  final VoidCallback onRemove;
+  final VoidCallback onSearchUsda;
+  final Function(double) onGramsChanged;
 
-  const FoodItemEditor({
-    super.key,
+  const _FoodItemCard({
     required this.item,
     required this.theme,
-    required this.onUpdate,
-    required this.onDelete,
+    required this.onRemove,
+    required this.onSearchUsda,
+    required this.onGramsChanged,
   });
 
   @override
+  State<_FoodItemCard> createState() => _FoodItemCardState();
+}
+
+class _FoodItemCardState extends State<_FoodItemCard> {
+  late TextEditingController _gramsController;
+
+  @override
+  void initState() {
+    super.initState();
+    _gramsController = TextEditingController(
+      text: widget.item.estimatedGrams.toStringAsFixed(0),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _FoodItemCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.estimatedGrams != widget.item.estimatedGrams) {
+      _gramsController.text = widget.item.estimatedGrams.toStringAsFixed(0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _gramsController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
+    final theme = widget.theme;
+
     return ShadCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header row
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
-                  borderRadius: BorderRadius.circular(12),
+                  color: item.isFromUsda
+                      ? Color.lerp(theme.colorScheme.primary, Colors.white, 0.85)
+                      : Color.lerp(const Color(0xFFF97316), Colors.white, 0.85),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  LucideIcons.utensils,
-                  color: theme.colorScheme.primary,
-                  size: 24,
+                  item.isFromUsda ? LucideIcons.database : LucideIcons.sparkles,
+                  size: 20,
+                  color: item.isFromUsda
+                      ? theme.colorScheme.primary
+                      : const Color(0xFFF97316),
                 ),
               ),
               const SizedBox(width: 12),
+              
               Expanded(
-                child: ShadInput(
-                  controller: item.nameController,
-                  placeholder: const Text('Food name'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ShadButton.ghost(
-                size: ShadButtonSize.sm,
-                onPressed: onDelete,
-                child: Icon(
-                  LucideIcons.trash2,
-                  size: 18,
-                  color: theme.colorScheme.destructive,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ShadInput(
-                  controller: item.weightController,
-                  placeholder: const Text('Weight'),
-                  keyboardType: TextInputType.number,
-                  leading: const Icon(LucideIcons.scale, size: 16),
-                  trailing: Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Text('g', style: theme.textTheme.muted),
-                  ),
-                  onChanged: (_) => onUpdate(),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
-                  borderRadius: BorderRadius.circular(8),
-                ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${item.currentCalories.toInt()} kcal',
-                      style: theme.textTheme.p.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.primary,
-                      ),
+                      item.displayName,
+                      style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildMacroBadge('P', item.currentProtein, const Color(0xFF3B82F6)),
-                        const SizedBox(width: 6),
-                        _buildMacroBadge('C', item.currentCarbs, const Color(0xFFF97316)),
-                        const SizedBox(width: 6),
-                        _buildMacroBadge('F', item.currentFat, const Color(0xFFEF4444)),
+                        if (item.isFromUsda)
+                          ShadBadge(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(LucideIcons.circleCheck, size: 10),
+                                const SizedBox(width: 4),
+                                const Text('USDA'),
+                              ],
+                            ),
+                          )
+                        else
+                          ShadBadge.secondary(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(LucideIcons.sparkles, size: 10),
+                                const SizedBox(width: 4),
+                                Text(
+                                  item.aiConfidence != null
+                                      ? 'AI ${(item.aiConfidence! * 100).round()}%'
+                                      : 'AI Estimate',
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ],
                 ),
               ),
+              
+              ShadButton.ghost(
+                size: ShadButtonSize.sm,
+                onPressed: widget.onRemove,
+                child: Icon(
+                  LucideIcons.trash2,
+                  size: 16,
+                  color: theme.colorScheme.destructive,
+                ),
+              ),
             ],
           ),
+          
+          const SizedBox(height: 12),
+          
+          // Portion and macros row
+          Row(
+            children: [
+              SizedBox(
+                width: 100,
+                child: ShadInput(
+                  controller: _gramsController,
+                  keyboardType: TextInputType.number,
+                  trailing: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text('g', style: theme.textTheme.muted),
+                  ),
+                  onChanged: (value) {
+                    final grams = double.tryParse(value);
+                    if (grams != null && grams > 0) {
+                      widget.onGramsChanged(grams);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _buildMacroBadge('${item.calories.round()}', 'kcal', theme.colorScheme.primary),
+                    _buildMacroBadge('${item.protein.round()}g', 'P', const Color(0xFF3B82F6)),
+                    _buildMacroBadge('${item.carbs.round()}g', 'C', const Color(0xFFF97316)),
+                    _buildMacroBadge('${item.fat.round()}g', 'F', const Color(0xFFEF4444)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          
+          if (!item.isFromUsda) ...[
+            const SizedBox(height: 12),
+            ShadButton.outline(
+              size: ShadButtonSize.sm,
+              onPressed: widget.onSearchUsda,
+              leading: const Icon(LucideIcons.search, size: 14),
+              child: const Text('Search USDA'),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildMacroBadge(String letter, double value, Color color) {
+  Widget _buildMacroBadge(String value, String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: Color.lerp(color, Colors.white, 0.85),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(
-        '$letter: ${value.toStringAsFixed(0)}g',
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+          Text(
+            ' $label',
+            style: TextStyle(
+              fontSize: 10,
+              color: color.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
       ),
     );
   }
