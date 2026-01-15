@@ -74,7 +74,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
+                        color: theme.colorScheme.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
@@ -140,7 +140,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Color.lerp(const Color(0xFF3B82F6), Colors.white, 0.85),
+                        color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
@@ -216,7 +216,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: Color.lerp(color, Colors.white, 0.85),
+            color: color.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Center(

@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:ai_calorie_tracker/providers/food_provider.dart';
-import 'package:ai_calorie_tracker/screens/profile_screen.dart';
-import 'package:ai_calorie_tracker/screens/diet_plan_screen.dart';
-import 'package:ai_calorie_tracker/screens/smart_entry_screen.dart';
 import 'package:ai_calorie_tracker/providers/user_provider.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:ai_calorie_tracker/screens/smart_entry_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -16,360 +13,641 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  DateTime _selectedDate = DateTime.now();
+  Set<DateTime> _loggedDates = {};
+
   @override
   void initState() {
     super.initState();
-    // Load today's logs when screen initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<FoodProvider>(context, listen: false).loadLogsForDate(DateTime.now());
+      _loadData();
     });
+  }
+
+  Future<void> _loadData() async {
+    final foodProvider = Provider.of<FoodProvider>(context, listen: false);
+    await foodProvider.loadLogsForDate(_selectedDate);
+    await _loadLoggedDates();
+  }
+
+  Future<void> _loadLoggedDates() async {
+    final foodProvider = Provider.of<FoodProvider>(context, listen: false);
+    final weekStart = _getWeekStart(_selectedDate);
+    final dates = await foodProvider.getLoggedDatesInWeek(weekStart);
+    setState(() {
+      _loggedDates = dates;
+    });
+  }
+
+  DateTime _getWeekStart(DateTime date) {
+    final weekday = date.weekday;
+    return date.subtract(Duration(days: weekday % 7));
+  }
+
+  void _selectDate(DateTime date) {
+    setState(() {
+      _selectedDate = date;
+    });
+    Provider.of<FoodProvider>(context, listen: false).loadLogsForDate(date);
+  }
+
+  void _navigateToAddFood(String mealType) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SmartEntryScreen(initialMealType: mealType),
+      ),
+    ).then((_) => _loadData());
   }
 
   @override
   Widget build(BuildContext context) {
-    final foodProvider = Provider.of<FoodProvider>(context);
-    final hasLogs = foodProvider.dailyLogs.isNotEmpty;
     final theme = ShadTheme.of(context);
+    final userProvider = Provider.of<UserProvider>(context);
+    final foodProvider = Provider.of<FoodProvider>(context);
+
+    final targetCalories = userProvider.userProfile?.dailyCalorieTarget ?? 2000;
+    final targetCarbs = (targetCalories * 0.5 / 4).round(); // 50% of calories from carbs
+    final targetFat = (targetCalories * 0.25 / 9).round(); // 25% from fat
+    final targetProtein = (targetCalories * 0.25 / 4).round(); // 25% from protein
+
+    final caloriesLeft = (targetCalories - foodProvider.totalCalories).round();
 
     return Scaffold(
-      body: ShadToaster(
-        child: CustomScrollView(
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              expandedHeight: 100.0,
-              floating: true,
-              pinned: true,
-              backgroundColor: theme.colorScheme.background,
-              surfaceTintColor: Colors.transparent,
-              actions: [
-                ShadButton.ghost(
-                  size: ShadButtonSize.sm,
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const DietPlanScreen()),
-                    );
-                  },
-                  child: Icon(
-                    LucideIcons.calendarDays,
-                    size: 20,
-                    color: theme.colorScheme.foreground,
-                  ),
-                ),
-                ShadButton.ghost(
-                  size: ShadButtonSize.sm,
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const ProfileScreen()),
-                    );
-                  },
-                  child: Icon(
-                    LucideIcons.userCog,
-                    size: 20,
-                    color: theme.colorScheme.foreground,
-                  ),
-                ),
-                ShadButton.ghost(
-                  size: ShadButtonSize.sm,
-                  onPressed: () {
-                    Provider.of<UserProvider>(context, listen: false).signOut();
-                  },
-                  child: Icon(
-                    LucideIcons.logOut,
-                    size: 20,
-                    color: theme.colorScheme.foreground,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                title: Text(
-                  'Today\'s Nutrition',
-                  style: theme.textTheme.h4.copyWith(
-                    color: theme.colorScheme.foreground,
-                  ),
-                ),
-                centerTitle: true,
-              ),
-            ),
-            
-            // Summary Card
-            SliverToBoxAdapter(
-              child: _buildSummaryCard(foodProvider, theme),
-            ),
-            
-            // Food Logs
-            if (hasLogs)
-              SliverPadding(
-                padding: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final log = foodProvider.dailyLogs[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: ShadCard(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  LucideIcons.utensils,
-                                  color: theme.colorScheme.primary,
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      log.name,
-                                      style: theme.textTheme.p.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${log.calories.toInt()} kcal • ${log.weightGrams.toInt()}g',
-                                      style: theme.textTheme.muted,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              ShadButton.ghost(
-                                size: ShadButtonSize.sm,
-                                onPressed: () => foodProvider.removeLog(log.id),
-                                child: Icon(
-                                  LucideIcons.trash2,
-                                  size: 18,
-                                  color: theme.colorScheme.destructive,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                    childCount: foodProvider.dailyLogs.length,
-                  ),
-                ),
-              )
-            else
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: Color.lerp(theme.colorScheme.muted, Colors.white, 0.85),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Icon(
-                          LucideIcons.chefHat,
-                          size: 40,
-                          color: theme.colorScheme.mutedForeground,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No meals logged today',
-                        style: theme.textTheme.large.copyWith(
-                          color: theme.colorScheme.mutedForeground,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tap the button below to add your first meal',
-                        style: theme.textTheme.muted,
-                      ),
-                    ],
-                  ),
+      backgroundColor: theme.colorScheme.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            _buildHeader(theme),
+
+            // Week selector
+            _buildWeekSelector(theme),
+
+            // Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 16),
+
+                    // Calories Card
+                    _buildCaloriesCard(
+                      theme,
+                      foodProvider.totalCalories.round(),
+                      targetCalories,
+                      caloriesLeft,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Macros Row
+                    _buildMacrosRow(
+                      theme,
+                      foodProvider.totalCarbs.round(),
+                      targetCarbs,
+                      foodProvider.totalFat.round(),
+                      targetFat,
+                      foodProvider.totalProtein.round(),
+                      targetProtein,
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Diary Section
+                    _buildDiarySection(theme, foodProvider),
+
+                    const SizedBox(height: 100),
+                  ],
                 ),
               ),
+            ),
           ],
         ),
-      ),
-      floatingActionButton: ShadButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SmartEntryScreen()),
-          );
-        },
-        leading: const Icon(LucideIcons.sparkles, size: 20),
-        child: const Text('Add Food'),
       ),
     );
   }
 
-  Widget _buildSummaryCard(FoodProvider provider, ShadThemeData theme) {
-    final hasData = provider.totalCalories > 0;
-    const targetCalories = 2000;
-    final progress = (provider.totalCalories / targetCalories).clamp(0.0, 1.0);
-    
+  Widget _buildHeader(ShadThemeData theme) {
+    final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
+    final dateText = isToday ? 'Today' : DateFormat('MMM d').format(_selectedDate);
+
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: ShadCard(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Calories', style: theme.textTheme.muted),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${(progress * 100).toInt()}%',
-                    style: theme.textTheme.small.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _selectedDate,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now(),
+              );
+              if (picked != null) {
+                _selectDate(picked);
+                _loadLoggedDates();
+              }
+            },
+            child: Row(
               children: [
                 Text(
-                  '${provider.totalCalories.toInt()}',
-                  style: theme.textTheme.h1.copyWith(
-                    color: theme.colorScheme.primary,
+                  dateText,
+                  style: theme.textTheme.h3.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    '/ $targetCalories kcal',
-                    style: theme.textTheme.muted,
+                const SizedBox(width: 4),
+                Icon(
+                  LucideIcons.chevronDown,
+                  size: 20,
+                  color: theme.colorScheme.foreground,
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          Text(
+            DateFormat('d ↑').format(_selectedDate),
+            style: theme.textTheme.muted,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeekSelector(ShadThemeData theme) {
+    final weekStart = _getWeekStart(_selectedDate);
+    final days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: List.generate(7, (index) {
+          final date = weekStart.add(Duration(days: index));
+          final isSelected = DateUtils.isSameDay(date, _selectedDate);
+          final hasLogs = _loggedDates.contains(DateTime(date.year, date.month, date.day));
+          final isToday = DateUtils.isSameDay(date, DateTime.now());
+
+          return GestureDetector(
+            onTap: () => _selectDate(date),
+            child: Column(
+              children: [
+                Text(
+                  days[index],
+                  style: theme.textTheme.small.copyWith(
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.mutedForeground,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : isToday
+                            ? theme.colorScheme.primary.withValues(alpha: 0.1)
+                            : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: hasLogs && !isSelected
+                        ? Icon(
+                            LucideIcons.check,
+                            size: 16,
+                            color: theme.colorScheme.primary,
+                          )
+                        : Text(
+                            '${date.day}',
+                            style: theme.textTheme.small.copyWith(
+                              color: isSelected
+                                  ? Colors.white
+                                  : theme.colorScheme.foreground,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            ShadProgress(value: progress),
-            const SizedBox(height: 24),
-            
-            // Macros Section
-            Row(
-              children: [
-                Expanded(
-                  child: hasData 
-                    ? SizedBox(
-                        height: 120,
-                        child: PieChart(
-                          PieChartData(
-                            sections: [
-                              PieChartSectionData(
-                                value: provider.totalProtein,
-                                color: const Color(0xFF3B82F6),
-                                title: '',
-                                radius: 35,
-                              ),
-                              PieChartSectionData(
-                                value: provider.totalCarbs,
-                                color: const Color(0xFFF97316),
-                                title: '',
-                                radius: 35,
-                              ),
-                              PieChartSectionData(
-                                value: provider.totalFat,
-                                color: const Color(0xFFEF4444),
-                                title: '',
-                                radius: 35,
-                              ),
-                            ],
-                            sectionsSpace: 3,
-                            centerSpaceRadius: 25,
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildCaloriesCard(
+    ShadThemeData theme,
+    int current,
+    int target,
+    int left,
+  ) {
+    final progress = (current / target).clamp(0.0, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Calories',
+            style: theme.textTheme.muted,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '$current cal',
+                style: theme.textTheme.h2.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '/ ${NumberFormat('#,###').format(target)}',
+                  style: theme.textTheme.muted.copyWith(fontSize: 16),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${NumberFormat('#,###').format(left.abs())} ${left >= 0 ? 'left' : 'over'}',
+                style: theme.textTheme.muted,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: theme.colorScheme.muted.withValues(alpha: 0.2),
+              color: left >= 0 ? theme.colorScheme.primary : theme.colorScheme.destructive,
+              minHeight: 8,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMacrosRow(
+    ShadThemeData theme,
+    int carbs,
+    int carbsTarget,
+    int fat,
+    int fatTarget,
+    int protein,
+    int proteinTarget,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildMacroItem(
+              theme,
+              'Carbs',
+              carbs,
+              carbsTarget,
+              const Color(0xFF8B5CF6), // Purple
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 40,
+            color: theme.colorScheme.border,
+          ),
+          Expanded(
+            child: _buildMacroItem(
+              theme,
+              'Fat',
+              fat,
+              fatTarget,
+              const Color(0xFFF59E0B), // Amber/Orange
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 40,
+            color: theme.colorScheme.border,
+          ),
+          Expanded(
+            child: _buildMacroItem(
+              theme,
+              'Protein',
+              protein,
+              proteinTarget,
+              const Color(0xFF06B6D4), // Cyan
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMacroItem(
+    ShadThemeData theme,
+    String label,
+    int current,
+    int target,
+    Color color,
+  ) {
+    final progress = (current / target).clamp(0.0, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.small.copyWith(
+                  color: theme.colorScheme.mutedForeground,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                '${current}g',
+                style: theme.textTheme.p.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                ' / $target',
+                style: theme.textTheme.small.copyWith(
+                  color: theme.colorScheme.mutedForeground,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Stack(
+            children: [
+              Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              FractionallySizedBox(
+                widthFactor: progress,
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiarySection(ShadThemeData theme, FoodProvider provider) {
+    final logsByMeal = provider.logsByMealType;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Diary',
+              style: theme.textTheme.h4.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                // TODO: Navigate to full diary view
+              },
+              child: Text(
+                'View all',
+                style: theme.textTheme.small.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Meal sections
+        _buildMealSection(
+          theme,
+          'Breakfast',
+          LucideIcons.coffee,
+          logsByMeal['Breakfast'] ?? [],
+          provider,
+        ),
+        _buildMealSection(
+          theme,
+          'Lunch',
+          LucideIcons.utensils,
+          logsByMeal['Lunch'] ?? [],
+          provider,
+        ),
+        _buildMealSection(
+          theme,
+          'Dinner',
+          LucideIcons.utensilsCrossed,
+          logsByMeal['Dinner'] ?? [],
+          provider,
+        ),
+        _buildMealSection(
+          theme,
+          'Snack',
+          LucideIcons.apple,
+          logsByMeal['Snack'] ?? [],
+          provider,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMealSection(
+    ShadThemeData theme,
+    String mealType,
+    IconData icon,
+    List logs,
+    FoodProvider provider,
+  ) {
+    final totals = provider.getTotalsForMealType(mealType);
+    final hasLogs = logs.isNotEmpty;
+    final foodNames = logs.take(2).map((log) => log.name).toList();
+    final extraCount = logs.length - 2;
+
+    String subtitle;
+    if (!hasLogs) {
+      subtitle = 'No items logged';
+    } else if (logs.length == 1) {
+      subtitle = foodNames[0];
+    } else if (logs.length == 2) {
+      subtitle = '${foodNames[0]} and ${foodNames[1]}';
+    } else {
+      subtitle = '${foodNames[0]} and $extraCount more';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          mealType,
+                          style: theme.textTheme.p.copyWith(
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      )
-                    : Center(
-                        child: Text(
-                          'No Data',
-                          style: theme.textTheme.muted,
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                LucideIcons.ellipsis,
+                                size: 18,
+                                color: theme.colorScheme.mutedForeground,
+                              ),
+                              onPressed: () {
+                                // Show meal options
+                              },
+                              constraints: const BoxConstraints(),
+                              padding: EdgeInsets.zero,
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton(
+                              onPressed: () => _navigateToAddFood(mealType),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                'Log',
+                                style: theme.textTheme.small.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                      ],
+                    ),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.small.copyWith(
+                        color: theme.colorScheme.mutedForeground,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 24),
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildMacroStat(
-                        'Protein',
-                        provider.totalProtein,
-                        const Color(0xFF3B82F6),
-                        theme,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMacroStat(
-                        'Carbs',
-                        provider.totalCarbs,
-                        const Color(0xFFF97316),
-                        theme,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildMacroStat(
-                        'Fat',
-                        provider.totalFat,
-                        const Color(0xFFEF4444),
-                        theme,
-                      ),
-                    ],
+              ),
+            ],
+          ),
+          if (hasLogs) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text(
+                  '${totals['calories']!.round()} cal',
+                  style: theme.textTheme.small.copyWith(
+                    color: theme.colorScheme.mutedForeground,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('·', style: theme.textTheme.small),
+                const SizedBox(width: 8),
+                Text(
+                  'C ${((totals['carbs']! * 4 / (totals['calories']! == 0 ? 1 : totals['calories']!)) * 100).round()}%',
+                  style: theme.textTheme.small.copyWith(
+                    color: theme.colorScheme.mutedForeground,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'F ${((totals['fat']! * 9 / (totals['calories']! == 0 ? 1 : totals['calories']!)) * 100).round()}%',
+                  style: theme.textTheme.small.copyWith(
+                    color: theme.colorScheme.mutedForeground,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'P ${((totals['protein']! * 4 / (totals['calories']! == 0 ? 1 : totals['calories']!)) * 100).round()}%',
+                  style: theme.textTheme.small.copyWith(
+                    color: theme.colorScheme.mutedForeground,
                   ),
                 ),
               ],
             ),
           ],
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildMacroStat(String label, double value, Color color, ShadThemeData theme) {
-    return Row(
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(label, style: theme.textTheme.small),
-        ),
-        Text(
-          '${value.toInt()}g',
-          style: theme.textTheme.small.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
     );
   }
 }

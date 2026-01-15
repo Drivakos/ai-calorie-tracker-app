@@ -65,4 +65,41 @@ class FoodProvider with ChangeNotifier {
     _dailyLogs = [];
     notifyListeners();
   }
+
+  /// Get logs grouped by meal type
+  Map<String, List<FoodLog>> get logsByMealType {
+    final grouped = <String, List<FoodLog>>{};
+    for (final mealType in ['Breakfast', 'Lunch', 'Dinner', 'Snack']) {
+      grouped[mealType] = _dailyLogs.where((log) => log.mealType == mealType).toList();
+    }
+    return grouped;
+  }
+
+  /// Check which dates in the week have logs
+  Future<Set<DateTime>> getLoggedDatesInWeek(DateTime weekStart) async {
+    final loggedDates = <DateTime>{};
+    for (int i = 0; i < 7; i++) {
+      final date = weekStart.add(Duration(days: i));
+      try {
+        final logs = await _db.getLogsForDate(date);
+        if (logs.isNotEmpty) {
+          loggedDates.add(DateTime(date.year, date.month, date.day));
+        }
+      } catch (e) {
+        debugPrint('Error checking logs for date: $e');
+      }
+    }
+    return loggedDates;
+  }
+
+  /// Get totals for a specific meal type
+  Map<String, double> getTotalsForMealType(String mealType) {
+    final logs = _dailyLogs.where((log) => log.mealType == mealType);
+    return {
+      'calories': logs.fold(0.0, (sum, log) => sum + log.calories),
+      'protein': logs.fold(0.0, (sum, log) => sum + log.protein),
+      'carbs': logs.fold(0.0, (sum, log) => sum + log.carbs),
+      'fat': logs.fold(0.0, (sum, log) => sum + log.fat),
+    };
+  }
 }

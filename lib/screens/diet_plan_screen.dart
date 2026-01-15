@@ -124,6 +124,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     final profile = Provider.of<UserProvider>(context).userProfile;
 
     return Scaffold(
+      backgroundColor: theme.colorScheme.background,
       appBar: AppBar(
         backgroundColor: theme.colorScheme.background,
         surfaceTintColor: Colors.transparent,
@@ -172,7 +173,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
+              color: theme.colorScheme.primary.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Center(
@@ -214,7 +215,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: Color.lerp(theme.colorScheme.destructive, Colors.white, 0.85),
+                color: theme.colorScheme.destructive.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
@@ -456,7 +457,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.9),
+        color: theme.colorScheme.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -512,7 +513,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Center(
@@ -607,12 +608,12 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isPrimary 
-            ? Color.lerp(theme.colorScheme.primary, Colors.white, 0.92)
+            ? theme.colorScheme.primary.withValues(alpha: 0.08)
             : theme.colorScheme.muted.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
         border: isPrimary 
             ? Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3))
-            : null,
+            : Border.all(color: theme.colorScheme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -763,7 +764,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Color.lerp(color, Colors.white, 0.85),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(

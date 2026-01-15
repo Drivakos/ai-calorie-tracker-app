@@ -127,7 +127,7 @@ class _UsdaSearchSheetState extends State<UsdaSearchSheet> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
+                        color: theme.colorScheme.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
@@ -346,7 +346,7 @@ class _FoodResultCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: Color.lerp(color, Colors.white, 0.85),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(

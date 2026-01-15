@@ -4,7 +4,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ai_calorie_tracker/providers/food_provider.dart';
 import 'package:ai_calorie_tracker/providers/user_provider.dart';
-import 'package:ai_calorie_tracker/screens/dashboard_screen.dart';
+import 'package:ai_calorie_tracker/screens/main_navigation_screen.dart';
 import 'package:ai_calorie_tracker/screens/login_screen.dart';
 import 'package:ai_calorie_tracker/screens/profile_setup_screen.dart';
 import 'package:ai_calorie_tracker/supabase_config.dart';
@@ -48,11 +48,11 @@ class MyApp extends StatelessWidget {
         themeMode: ThemeMode.system,
         theme: ShadThemeData(
           brightness: Brightness.light,
-          colorScheme: ShadColorScheme.fromName('green'),
+          colorScheme: ShadColorScheme.fromName('orange'),
         ),
         darkTheme: ShadThemeData(
           brightness: Brightness.dark,
-          colorScheme: ShadColorScheme.fromName('green', brightness: Brightness.dark),
+          colorScheme: ShadColorScheme.fromName('orange', brightness: Brightness.dark),
         ),
         home: supabaseInitialized 
           ? const AuthWrapper()
@@ -131,6 +131,6 @@ class AuthWrapper extends StatelessWidget {
       return const ProfileSetupScreen();
     }
 
-    return const DashboardScreen();
+    return const MainNavigationScreen();
   }
 }

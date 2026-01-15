@@ -10,7 +10,9 @@ import 'package:ai_calorie_tracker/services/gemini_service.dart';
 import 'package:ai_calorie_tracker/widgets/usda_search_sheet.dart';
 
 class SmartEntryScreen extends StatefulWidget {
-  const SmartEntryScreen({super.key});
+  final String? initialMealType;
+  
+  const SmartEntryScreen({super.key, this.initialMealType});
 
   @override
   State<SmartEntryScreen> createState() => _SmartEntryScreenState();
@@ -31,7 +33,7 @@ class _SmartEntryScreenState extends State<SmartEntryScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedMealType = _mealTypes[0];
+    _selectedMealType = widget.initialMealType ?? _mealTypes[0];
   }
 
   @override
@@ -362,7 +364,7 @@ class _SmartEntryScreenState extends State<SmartEntryScreen> {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
+              color: theme.colorScheme.primary.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Center(
@@ -399,7 +401,7 @@ class _SmartEntryScreenState extends State<SmartEntryScreen> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.85),
+                color: theme.colorScheme.primary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
@@ -549,7 +551,7 @@ class _SmartEntryScreenState extends State<SmartEntryScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Color.lerp(theme.colorScheme.primary, Colors.white, 0.92),
+                color: theme.colorScheme.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -679,8 +681,8 @@ class _FoodItemCardState extends State<_FoodItemCard> {
                     height: 44,
                     decoration: BoxDecoration(
                       color: item.isFromUsda
-                          ? Color.lerp(theme.colorScheme.primary, Colors.white, 0.85)
-                          : Color.lerp(const Color(0xFFF97316), Colors.white, 0.85),
+                          ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                          : const Color(0xFFF97316).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -864,7 +866,7 @@ class _FoodItemCardState extends State<_FoodItemCard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Color.lerp(color, Colors.white, 0.85),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
