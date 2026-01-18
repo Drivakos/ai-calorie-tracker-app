@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:ai_calorie_tracker/providers/user_provider.dart';
 import 'package:ai_calorie_tracker/models/user_profile.dart';
+import 'package:ai_calorie_tracker/widgets/profile_card.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -447,8 +448,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                       items: ActivityLevel.values.map((level) => ShadRadio(
                         value: level,
-                        label: Text(level.label),
-                        sublabel: Text(level.description),
+                        label: Text(level.label, style: TextStyle(color: theme.colorScheme.foreground)),
+                        sublabel: Text(level.description, style: TextStyle(color: theme.colorScheme.mutedForeground)),
                       )).toList(),
                     ),
                   ],
@@ -475,12 +476,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           value: goal,
                           label: Row(
                             children: [
-                              Text(goal.label),
+                              Text(goal.label, style: TextStyle(color: theme.colorScheme.foreground)),
                               const SizedBox(width: 8),
-                              ShadBadge.outline(child: Text(adjustmentText)),
+                              ShadBadge.outline(child: Text(adjustmentText, style: TextStyle(color: theme.colorScheme.foreground))),
                             ],
                           ),
-                          sublabel: Text(goal.description),
+                          sublabel: Text(goal.description, style: TextStyle(color: theme.colorScheme.mutedForeground)),
                         );
                       }).toList(),
                     ),
@@ -489,177 +490,142 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 16),
 
                 // Dietary Restrictions
-                _buildSection(
-                  theme,
+                ProfileCard(
                   icon: LucideIcons.utensils,
                   title: 'Dietary Restrictions',
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: DietaryRestriction.allRestrictions.map((item) {
-                        final isSelected = _selectedDietaryRestrictions.contains(item);
-                        return ShadButton(
-                          size: ShadButtonSize.sm,
-                          onPressed: () {
-                            setState(() {
-                              if (isSelected) {
-                                _selectedDietaryRestrictions.remove(item);
-                              } else {
-                                _selectedDietaryRestrictions.add(item);
-                              }
-                            });
-                          },
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isSelected) ...[
-                                const Icon(LucideIcons.check, size: 14),
-                                const SizedBox(width: 4),
-                              ],
-                              Text(item),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 10,
+                    children: DietaryRestriction.allRestrictions.map((item) {
+                      final isSelected = _selectedDietaryRestrictions.contains(item);
+                      return SelectableChip(
+                        label: item,
+                        isSelected: isSelected,
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedDietaryRestrictions.remove(item);
+                            } else {
+                              _selectedDietaryRestrictions.add(item);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
                 // Allergies
-                _buildSection(
-                  theme,
+                ProfileCard(
                   icon: LucideIcons.triangleAlert,
                   iconColor: theme.colorScheme.destructive,
                   title: 'Food Allergies',
-                  children: [
-                    // Custom allergy input
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ShadInput(
-                            controller: _allergyController,
-                            placeholder: const Text('Add custom allergy...'),
-                            onSubmitted: (_) => _addCustomAllergy(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Custom allergy input
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ShadInput(
+                              controller: _allergyController,
+                              placeholder: const Text('Add custom allergy...'),
+                              onSubmitted: (_) => _addCustomAllergy(),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        ShadButton.destructive(
-                          size: ShadButtonSize.sm,
-                          onPressed: _addCustomAllergy,
-                          child: const Icon(LucideIcons.plus, size: 16),
+                          const SizedBox(width: 8),
+                          ShadButton.destructive(
+                            size: ShadButtonSize.sm,
+                            onPressed: _addCustomAllergy,
+                            child: const Icon(LucideIcons.plus, size: 16),
+                          ),
+                        ],
+                      ),
+                      if (_customAllergies.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _customAllergies.map((allergy) {
+                            return RemovableTag(
+                              label: allergy,
+                              color: theme.colorScheme.destructive,
+                              onRemove: () => setState(() {
+                                _customAllergies.remove(allergy);
+                                _selectedAllergies.remove(allergy);
+                              }),
+                            );
+                          }).toList(),
                         ),
                       ],
-                    ),
-                    if (_customAllergies.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
-                        runSpacing: 8,
-                        children: _customAllergies.map((allergy) {
-                          return ShadBadge.destructive(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(allergy),
-                                const SizedBox(width: 4),
-                                GestureDetector(
-                                  onTap: () => setState(() {
-                                    _customAllergies.remove(allergy);
-                                    _selectedAllergies.remove(allergy);
-                                  }),
-                                  child: const Icon(LucideIcons.x, size: 12),
-                                ),
-                              ],
-                            ),
+                        runSpacing: 10,
+                        children: FoodAllergy.allAllergies.map((item) {
+                          final isSelected = _selectedAllergies.contains(item);
+                          return SelectableChip(
+                            label: item,
+                            isSelected: isSelected,
+                            selectedColor: theme.colorScheme.destructive,
+                            onTap: () {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedAllergies.remove(item);
+                                } else {
+                                  _selectedAllergies.add(item);
+                                }
+                              });
+                            },
                           );
                         }).toList(),
                       ),
                     ],
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: FoodAllergy.allAllergies.map((item) {
-                        final isSelected = _selectedAllergies.contains(item);
-                        return ShadButton(
-                          size: ShadButtonSize.sm,
-                          onPressed: () {
-                            setState(() {
-                              if (isSelected) {
-                                _selectedAllergies.remove(item);
-                              } else {
-                                _selectedAllergies.add(item);
-                              }
-                            });
-                          },
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isSelected) ...[
-                                Icon(LucideIcons.check, size: 14, color: theme.colorScheme.destructive),
-                                const SizedBox(width: 4),
-                              ],
-                              Text(
-                                item,
-                                style: isSelected ? TextStyle(color: theme.colorScheme.destructive) : null,
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
+                  ),
                 ),
                 const SizedBox(height: 16),
 
-                // Preferred Foods
-                _buildSection(
-                  theme,
+                ProfileCard(
                   icon: LucideIcons.heart,
+                  iconColor: const Color(0xFFEF4444),
                   title: 'Preferred Foods',
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ShadInput(
-                            controller: _preferredFoodController,
-                            placeholder: const Text('e.g., Chicken, Rice...'),
-                            onSubmitted: (_) => _addPreferredFood(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ShadInput(
+                              controller: _preferredFoodController,
+                              placeholder: const Text('e.g., Chicken, Rice...'),
+                              onSubmitted: (_) => _addPreferredFood(),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        ShadButton.outline(
-                          size: ShadButtonSize.sm,
-                          onPressed: _addPreferredFood,
-                          child: const Icon(LucideIcons.plus, size: 16),
+                          const SizedBox(width: 8),
+                          ShadButton(
+                            size: ShadButtonSize.sm,
+                            onPressed: _addPreferredFood,
+                            child: const Icon(LucideIcons.plus, size: 16),
+                          ),
+                        ],
+                      ),
+                      if (_preferredFoods.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _preferredFoods.map((food) {
+                            return RemovableTag(
+                              label: food,
+                              color: const Color(0xFFEF4444),
+                              onRemove: () => setState(() => _preferredFoods.remove(food)),
+                            );
+                          }).toList(),
                         ),
                       ],
-                    ),
-                    if (_preferredFoods.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _preferredFoods.map((food) {
-                          return ShadBadge(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(food),
-                                const SizedBox(width: 4),
-                                GestureDetector(
-                                  onTap: () => setState(() => _preferredFoods.remove(food)),
-                                  child: const Icon(LucideIcons.x, size: 12),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
                     ],
-                  ],
+                  ),
                 ),
                 const SizedBox(height: 32),
 

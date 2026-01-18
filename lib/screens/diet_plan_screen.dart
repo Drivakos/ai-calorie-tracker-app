@@ -782,9 +782,12 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(LucideIcons.clock, size: 10),
+                          Icon(LucideIcons.clock, size: 10, color: theme.colorScheme.foreground),
                           const SizedBox(width: 4),
-                          Text(option.preparationTime!),
+                          Text(
+                            option.preparationTime!,
+                            style: TextStyle(color: theme.colorScheme.foreground),
+                          ),
                         ],
                       ),
                     ),
@@ -840,7 +843,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
                             ),
                             child: Text(
                               ing,
-                              style: theme.textTheme.muted.copyWith(fontSize: 11),
+                              style: TextStyle(fontSize: 11, color: theme.colorScheme.foreground.withValues(alpha: 0.8)),
                             ),
                           );
                         }).toList(),
@@ -861,7 +864,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
                         ),
                         child: Text(
                           ing,
-                          style: theme.textTheme.muted.copyWith(fontSize: 11),
+                          style: TextStyle(fontSize: 11, color: theme.colorScheme.foreground.withValues(alpha: 0.8)),
                         ),
                       );
                     }).toList(),
