@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io' if (dart.library.html) 'dart:html';
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
@@ -31,7 +31,7 @@ class GeminiService {
       return response.bodyBytes;
     } else {
       // For desktop/mobile, read from file system
-      final file = File(imagePath);
+      final file = XFile(imagePath);
       return await file.readAsBytes();
     }
   }
@@ -327,7 +327,8 @@ Example: If user says "it's a beef cheeseburger not vegan" → identify as "Beef
           ?.map((d) => DailyPlan.fromJson(d))
           .toList() ?? [];
 
-      return WeeklyDietPlan(
+      // Create initial plan
+      var plan = WeeklyDietPlan(
         macroTargets: macros,
         days: days,
         mealsPerDay: profile.mealsPerDay,
@@ -335,10 +336,145 @@ Example: If user says "it's a beef cheeseburger not vegan" → identify as "Beef
         dietaryRestrictions: profile.dietaryRestrictions,
         generatedAt: DateTime.now(),
       );
+
+      // Enrich with USDA data
+      plan = await _enrichPlanWithUsda(plan);
+
+      return plan;
     } catch (e) {
       debugPrint('Gemini Diet Plan Error: $e');
       rethrow;
     }
+  }
+
+  /// Enrich a weekly diet plan with USDA nutritional data
+  Future<WeeklyDietPlan> _enrichPlanWithUsda(WeeklyDietPlan plan) async {
+    final enrichedDays = <DailyPlan>[];
+
+    for (final day in plan.days) {
+      final enrichedMeals = <Meal>[];
+
+      for (final meal in day.meals) {
+        // Enrich primary meal option
+        final enrichedPrimary = await _enrichMealOption(meal.primary);
+
+        // Enrich alternatives (limit to first 5 to avoid too many API calls)
+        final enrichedAlts = <MealOption>[];
+        for (var i = 0; i < meal.alternatives.length && i < 5; i++) {
+          try {
+            final enriched = await _enrichMealOption(meal.alternatives[i]);
+            enrichedAlts.add(enriched);
+          } catch (e) {
+            enrichedAlts.add(meal.alternatives[i]); // Keep original on error
+          }
+        }
+        // Add remaining alternatives without enrichment
+        if (meal.alternatives.length > 5) {
+          enrichedAlts.addAll(meal.alternatives.sublist(5));
+        }
+
+        enrichedMeals.add(Meal(
+          mealType: meal.mealType,
+          mealNumber: meal.mealNumber,
+          primary: enrichedPrimary,
+          alternatives: enrichedAlts,
+        ));
+      }
+
+      enrichedDays.add(DailyPlan(
+        dayOfWeek: day.dayOfWeek,
+        dayNumber: day.dayNumber,
+        meals: enrichedMeals,
+        totalCalories: day.totalCalories,
+        totalProteinG: day.totalProteinG,
+        totalCarbsG: day.totalCarbsG,
+        totalFatG: day.totalFatG,
+      ));
+    }
+
+    return plan.copyWith(days: enrichedDays);
+  }
+
+  /// Enrich a single meal option with USDA data
+  Future<MealOption> _enrichMealOption(MealOption option) async {
+    final usdaIngredients = <UsdaIngredient>[];
+    double totalCals = 0;
+    double totalProtein = 0;
+    double totalCarbs = 0;
+    double totalFat = 0;
+
+    for (final ingredient in option.ingredients) {
+      try {
+        // Search USDA for this ingredient
+        final match = await _usdaService.findBestMatch(ingredient);
+        if (match != null) {
+          // Estimate portion size (default 100g, can be refined)
+          final portionGrams = _estimatePortionSize(ingredient);
+          final macros = match.calculateForPortion(portionGrams);
+
+          final usdaIngredient = UsdaIngredient(
+            fdcId: match.fdcId,
+            name: match.description,
+            quantityGrams: portionGrams,
+            calories: macros['calories'] ?? 0,
+            proteinG: macros['protein'] ?? 0,
+            carbsG: macros['carbs'] ?? 0,
+            fatG: macros['fat'] ?? 0,
+            fiberG: macros['fiber'],
+            sugarG: macros['sugar'],
+          );
+
+          usdaIngredients.add(usdaIngredient);
+          totalCals += usdaIngredient.calories;
+          totalProtein += usdaIngredient.proteinG;
+          totalCarbs += usdaIngredient.carbsG;
+          totalFat += usdaIngredient.fatG;
+        }
+      } catch (e) {
+        debugPrint('Failed to enrich ingredient $ingredient: $e');
+      }
+    }
+
+    // If we successfully matched at least half the ingredients, mark as verified
+    if (usdaIngredients.length >= option.ingredients.length / 2) {
+      return option.withUsdaData(
+        usdaIngredients: usdaIngredients,
+        calories: totalCals.round(),
+        proteinG: totalProtein,
+        carbsG: totalCarbs,
+        fatG: totalFat,
+      );
+    }
+
+    return option; // Return original if not enough matches
+  }
+
+  /// Estimate portion size for an ingredient string
+  double _estimatePortionSize(String ingredient) {
+    final lower = ingredient.toLowerCase();
+    
+    // Try to parse quantity from ingredient string
+    final quantityMatch = RegExp(r'(\d+(?:\.\d+)?)\s*(g|grams?|oz|ounces?|cups?|tbsp|tsp)').firstMatch(lower);
+    if (quantityMatch != null) {
+      final value = double.tryParse(quantityMatch.group(1) ?? '') ?? 100;
+      final unit = quantityMatch.group(2) ?? 'g';
+      return UsdaService.convertToGrams(value, unit, ingredient);
+    }
+
+    // Default portion estimates by food type
+    if (lower.contains('chicken') || lower.contains('meat') || lower.contains('fish')) {
+      return 150; // 150g protein portions
+    } else if (lower.contains('rice') || lower.contains('pasta')) {
+      return 150; // cooked grains
+    } else if (lower.contains('vegetable') || lower.contains('salad')) {
+      return 100;
+    } else if (lower.contains('egg')) {
+      return 50; // one large egg
+    } else if (lower.contains('fruit')) {
+      return 120;
+    }
+
+    return 100; // Default 100g
   }
 
   /// Generate a single day's meal plan (for quick regeneration)

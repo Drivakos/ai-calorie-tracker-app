@@ -1,3 +1,54 @@
+/// Represents an ingredient with USDA-verified nutrition data
+class UsdaIngredient {
+  final String fdcId;
+  final String name;
+  final double quantityGrams;
+  final double calories;
+  final double proteinG;
+  final double carbsG;
+  final double fatG;
+  final double? fiberG;
+  final double? sugarG;
+
+  const UsdaIngredient({
+    required this.fdcId,
+    required this.name,
+    required this.quantityGrams,
+    required this.calories,
+    required this.proteinG,
+    required this.carbsG,
+    required this.fatG,
+    this.fiberG,
+    this.sugarG,
+  });
+
+  factory UsdaIngredient.fromJson(Map<String, dynamic> json) {
+    return UsdaIngredient(
+      fdcId: json['fdc_id'] ?? '',
+      name: json['name'] ?? '',
+      quantityGrams: (json['quantity_grams'] as num?)?.toDouble() ?? 0,
+      calories: (json['calories'] as num?)?.toDouble() ?? 0,
+      proteinG: (json['protein_g'] as num?)?.toDouble() ?? 0,
+      carbsG: (json['carbs_g'] as num?)?.toDouble() ?? 0,
+      fatG: (json['fat_g'] as num?)?.toDouble() ?? 0,
+      fiberG: (json['fiber_g'] as num?)?.toDouble(),
+      sugarG: (json['sugar_g'] as num?)?.toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'fdc_id': fdcId,
+    'name': name,
+    'quantity_grams': quantityGrams,
+    'calories': calories,
+    'protein_g': proteinG,
+    'carbs_g': carbsG,
+    'fat_g': fatG,
+    if (fiberG != null) 'fiber_g': fiberG,
+    if (sugarG != null) 'sugar_g': sugarG,
+  };
+}
+
 /// Represents a single meal option with detailed macros
 class MealOption {
   final String name;
@@ -11,6 +62,9 @@ class MealOption {
   final double sugarG;
   final List<String> ingredients;
   final String? preparationTime;
+  // USDA verification fields
+  final bool usdaVerified;
+  final List<UsdaIngredient> usdaIngredients;
 
   const MealOption({
     required this.name,
@@ -24,6 +78,8 @@ class MealOption {
     this.sugarG = 0,
     this.ingredients = const [],
     this.preparationTime,
+    this.usdaVerified = false,
+    this.usdaIngredients = const [],
   });
 
   factory MealOption.fromJson(Map<String, dynamic> json) {
@@ -41,6 +97,12 @@ class MealOption {
           ? List<String>.from(json['ingredients'])
           : [],
       preparationTime: json['preparation_time'],
+      usdaVerified: (json['usda_verified'] as bool?) ?? false,
+      usdaIngredients: json['usda_ingredients'] != null
+          ? (json['usda_ingredients'] as List)
+              .map((i) => UsdaIngredient.fromJson(i))
+              .toList()
+          : [],
     );
   }
 
@@ -56,7 +118,34 @@ class MealOption {
     'sugar_g': sugarG,
     'ingredients': ingredients,
     'preparation_time': preparationTime,
+    'usda_verified': usdaVerified,
+    'usda_ingredients': usdaIngredients.map((i) => i.toJson()).toList(),
   };
+
+  /// Create a copy with USDA-verified data
+  MealOption withUsdaData({
+    required List<UsdaIngredient> usdaIngredients,
+    required int calories,
+    required double proteinG,
+    required double carbsG,
+    required double fatG,
+  }) {
+    return MealOption(
+      name: name,
+      description: description,
+      calories: calories,
+      proteinG: proteinG,
+      carbsG: carbsG,
+      fatG: fatG,
+      fiberG: fiberG,
+      sodiumMg: sodiumMg,
+      sugarG: sugarG,
+      ingredients: ingredients,
+      preparationTime: preparationTime,
+      usdaVerified: true,
+      usdaIngredients: usdaIngredients,
+    );
+  }
 }
 
 /// Represents a meal slot with primary option and alternatives

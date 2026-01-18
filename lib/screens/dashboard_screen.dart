@@ -15,6 +15,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   DateTime _selectedDate = DateTime.now();
   Set<DateTime> _loggedDates = {};
+  int _streak = 0;
 
   @override
   void initState() {
@@ -28,6 +29,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final foodProvider = Provider.of<FoodProvider>(context, listen: false);
     await foodProvider.loadLogsForDate(_selectedDate);
     await _loadLoggedDates();
+    await _loadStreak();
   }
 
   Future<void> _loadLoggedDates() async {
@@ -39,6 +41,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  Future<void> _loadStreak() async {
+    final foodProvider = Provider.of<FoodProvider>(context, listen: false);
+    final streak = await foodProvider.getLoggingStreak();
+    setState(() {
+      _streak = streak;
+    });
+  }
+ 
   DateTime _getWeekStart(DateTime date) {
     final weekday = date.weekday;
     return date.subtract(Duration(days: weekday % 7));
@@ -169,9 +179,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           const Spacer(),
-          Text(
-            DateFormat('d ↑').format(_selectedDate),
-            style: theme.textTheme.muted,
+          Row(
+            children: [
+              Icon(
+                LucideIcons.flame,
+                size: 18,
+                color: _streak > 0
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.mutedForeground,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '$_streak',
+                style: theme.textTheme.p.copyWith(
+                  color: _streak > 0
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.mutedForeground,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -575,21 +602,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               padding: EdgeInsets.zero,
                             ),
                             const SizedBox(width: 8),
-                            TextButton(
-                              onPressed: () => _navigateToAddFood(mealType),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                'Log',
-                                style: theme.textTheme.small.copyWith(
+                            GestureDetector(
+                              onTap: () => _navigateToAddFood(mealType),
+                              child: Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
                                   color: theme.colorScheme.primary,
-                                  fontWeight: FontWeight.w600,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  LucideIcons.plus,
+                                  size: 16,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),

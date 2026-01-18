@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:uuid/uuid.dart';
 import 'package:ai_calorie_tracker/models/diet_plan.dart';
+import 'package:ai_calorie_tracker/models/food_log.dart';
 import 'package:ai_calorie_tracker/providers/user_provider.dart';
+import 'package:ai_calorie_tracker/providers/food_provider.dart';
 import 'package:ai_calorie_tracker/services/gemini_service.dart';
 import 'package:ai_calorie_tracker/services/database_service.dart';
 
@@ -118,6 +121,52 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     }
   }
 
+  /// Log a meal option to the food diary
+  Future<void> _logMeal(MealOption option, String mealType) async {
+    final foodProvider = Provider.of<FoodProvider>(context, listen: false);
+    
+    // Calculate estimated weight from ingredients or use default
+    double estimatedWeight = 0;
+    if (option.usdaIngredients.isNotEmpty) {
+      estimatedWeight = option.usdaIngredients.fold(0.0, (sum, ing) => sum + ing.quantityGrams);
+    } else {
+      estimatedWeight = 300; // Default meal weight
+    }
+    
+    final log = FoodLog(
+      id: const Uuid().v4(),
+      name: option.name,
+      weightGrams: estimatedWeight,
+      calories: option.calories.toDouble(),
+      protein: option.proteinG,
+      carbs: option.carbsG,
+      fat: option.fatG,
+      timestamp: DateTime.now(),
+      mealType: mealType,
+    );
+    
+    try {
+      await foodProvider.addLog(log);
+      if (mounted) {
+        ShadToaster.of(context).show(
+          ShadToast(
+            title: const Text('Meal logged!'),
+            description: Text('${option.name} added to $mealType'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ShadToaster.of(context).show(
+          ShadToast.destructive(
+            title: const Text('Failed to log meal'),
+            description: Text('$e'),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = ShadTheme.of(context);
@@ -130,14 +179,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
         surfaceTintColor: Colors.transparent,
         title: Text('Weekly Diet Plan', style: theme.textTheme.h4),
         centerTitle: true,
-        leading: ShadButton.ghost(
-          size: ShadButtonSize.sm,
-          onPressed: () => Navigator.pop(context),
-          child: Icon(
-            LucideIcons.arrowLeft,
-            color: theme.colorScheme.foreground,
-          ),
-        ),
+        automaticallyImplyLeading: false, // This is a tab screen, no back button
         actions: [
           if (!_isLoading && !_isLoadingFromDb)
             ShadButton.ghost(
@@ -196,7 +238,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'This may take a moment',
+            'Validating nutrition with USDA database',
             style: theme.textTheme.muted,
           ),
         ],
@@ -387,33 +429,52 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
   }
 
   Widget _buildDaySelector(ShadThemeData theme, WeeklyDietPlan plan) {
+    // Single letter abbreviations for compact display
+    final dayAbbreviations = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    
     return Container(
-      height: 48,
+      height: 44,
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: plan.days.length,
-        itemBuilder: (context, index) {
-          final day = plan.days[index];
+      child: Row(
+        children: plan.days.asMap().entries.map((entry) {
+          final index = entry.key;
           final isSelected = index == _selectedDayIndex;
+          final abbrev = index < dayAbbreviations.length 
+              ? dayAbbreviations[index] 
+              : entry.value.dayOfWeek.substring(0, 1);
           
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ShadButton(
-              size: ShadButtonSize.sm,
-              onPressed: () => setState(() {
-                _selectedDayIndex = index;
-                _selectedMealIndex = 0;
-              }),
-              child: Text(
-                day.dayOfWeek.substring(0, 3),
-                style: TextStyle(
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: index < plan.days.length - 1 ? 4 : 0),
+              child: GestureDetector(
+                onTap: () => setState(() {
+                  _selectedDayIndex = index;
+                  _selectedMealIndex = 0;
+                }),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isSelected 
+                        ? theme.colorScheme.primary 
+                        : theme.colorScheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Text(
+                      abbrev,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected 
+                            ? theme.colorScheme.primaryForeground 
+                            : theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           );
-        },
+        }).toList(),
       ),
     );
   }
@@ -561,7 +622,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
             const SizedBox(height: 16),
             
             // Primary Meal (always visible)
-            _buildMealOption(theme, meal.primary, isPrimary: true),
+            _buildMealOption(theme, meal.primary, mealType: meal.mealType, isPrimary: true),
             
             // Alternatives (expanded view)
             if (isExpanded && meal.alternatives.isNotEmpty) ...[
@@ -584,11 +645,13 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
                   itemCount: meal.alternatives.length,
                   itemBuilder: (context, altIndex) {
                     return Container(
-                      width: 300,
+                      width: 280,
+                      height: 280,
                       margin: const EdgeInsets.only(right: 12),
                       child: _buildMealOption(
                         theme, 
                         meal.alternatives[altIndex], 
+                        mealType: meal.mealType,
                         isPrimary: false,
                         altNumber: altIndex + 1,
                       ),
@@ -603,160 +666,243 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     );
   }
 
-  Widget _buildMealOption(ShadThemeData theme, MealOption option, {required bool isPrimary, int? altNumber}) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isPrimary 
-            ? theme.colorScheme.primary.withValues(alpha: 0.08)
-            : theme.colorScheme.muted.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: isPrimary 
-            ? Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3))
-            : Border.all(color: theme.colorScheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+  Widget _buildMealOption(ShadThemeData theme, MealOption option, {required String mealType, required bool isPrimary, int? altNumber}) {
+    return Stack(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          clipBehavior: Clip.hardEdge,
+          decoration: BoxDecoration(
+            color: isPrimary 
+                ? theme.colorScheme.primary.withValues(alpha: 0.08)
+                : theme.colorScheme.muted.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+            border: isPrimary 
+                ? Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3))
+                : Border.all(color: theme.colorScheme.border),
+          ),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: isPrimary ? MainAxisSize.min : MainAxisSize.max,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (isPrimary)
-                          Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'MAIN',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: theme.colorScheme.primaryForeground,
+                        Row(
+                          children: [
+                            if (isPrimary)
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'MAIN',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: theme.colorScheme.primaryForeground,
+                                  ),
+                                ),
+                              )
+                            else if (altNumber != null)
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.muted,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'ALT $altNumber',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.mutedForeground,
+                                  ),
+                                ),
+                              ),
+                            // USDA Verification Badge
+                            if (option.usdaVerified)
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      LucideIcons.badgeCheck,
+                                      size: 10,
+                                      color: Color(0xFF22C55E),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'USDA',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF22C55E),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            Expanded(
+                              child: Text(
+                                option.name,
+                                style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w600),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          )
-                        else if (altNumber != null)
-                          Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.muted,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'ALT $altNumber',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w600,
-                                color: theme.colorScheme.mutedForeground,
-                              ),
-                            ),
-                          ),
-                        Expanded(
-                          child: Text(
-                            option.name,
-                            style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w600),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          option.description,
+                          style: theme.textTheme.muted,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      option.description,
-                      style: theme.textTheme.muted,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                  ),
+                  if (option.preparationTime != null)
+                    ShadBadge.outline(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(LucideIcons.clock, size: 10),
+                          const SizedBox(width: 4),
+                          Text(option.preparationTime!),
+                        ],
+                      ),
                     ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // Primary Macros Row
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _buildMacroBadge('${option.calories}', 'kcal', theme.colorScheme.primary),
+                  _buildMacroBadge('${option.proteinG.round()}g', 'P', const Color(0xFF3B82F6)),
+                  _buildMacroBadge('${option.carbsG.round()}g', 'C', const Color(0xFFF97316)),
+                  _buildMacroBadge('${option.fatG.round()}g', 'F', const Color(0xFFEF4444)),
+                ],
+              ),
+              
+              // Detailed Macros (fiber, sodium, sugar)
+              if (option.fiberG > 0 || option.sodiumMg > 0 || option.sugarG > 0) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (option.fiberG > 0)
+                      _buildDetailMacroBadge('${option.fiberG.round()}g fiber', theme),
+                    if (option.sodiumMg > 0)
+                      _buildDetailMacroBadge('${option.sodiumMg.round()}mg sodium', theme),
+                    if (option.sugarG > 0)
+                      _buildDetailMacroBadge('${option.sugarG.round()}g sugar', theme),
                   ],
                 ),
-              ),
-              if (option.preparationTime != null)
-                ShadBadge.outline(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(LucideIcons.clock, size: 10),
-                      const SizedBox(width: 4),
-                      Text(option.preparationTime!),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          
-          // Primary Macros Row
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _buildMacroBadge('${option.calories}', 'kcal', theme.colorScheme.primary),
-              _buildMacroBadge('${option.proteinG.round()}g', 'P', const Color(0xFF3B82F6)),
-              _buildMacroBadge('${option.carbsG.round()}g', 'C', const Color(0xFFF97316)),
-              _buildMacroBadge('${option.fatG.round()}g', 'F', const Color(0xFFEF4444)),
-            ],
-          ),
-          
-          // Detailed Macros (fiber, sodium, sugar)
-          if (option.fiberG > 0 || option.sodiumMg > 0 || option.sugarG > 0) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                if (option.fiberG > 0)
-                  _buildDetailMacroBadge('${option.fiberG.round()}g fiber', theme),
-                if (option.sodiumMg > 0)
-                  _buildDetailMacroBadge('${option.sodiumMg.round()}mg sodium', theme),
-                if (option.sugarG > 0)
-                  _buildDetailMacroBadge('${option.sugarG.round()}g sugar', theme),
               ],
-            ),
-          ],
-          
-          // Ingredients (collapsible)
-          if (option.ingredients.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: option.ingredients.take(6).map((ing) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.muted.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
+              
+              // Ingredients section
+              if (option.ingredients.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                // For alternative cards (fixed height), use Expanded with scroll
+                if (!isPrimary)
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: option.ingredients.map((ing) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.muted.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              ing,
+                              style: theme.textTheme.muted.copyWith(fontSize: 11),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  )
+                else ...[
+                  // For primary cards, show limited ingredients
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: option.ingredients.take(6).map((ing) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.muted.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          ing,
+                          style: theme.textTheme.muted.copyWith(fontSize: 11),
+                        ),
+                      );
+                    }).toList(),
                   ),
-                  child: Text(
-                    ing,
-                    style: theme.textTheme.muted.copyWith(fontSize: 11),
-                  ),
-                );
-              }).toList(),
-            ),
-            if (option.ingredients.length > 6)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '+${option.ingredients.length - 6} more ingredients',
-                  style: theme.textTheme.muted.copyWith(fontSize: 10),
-                ),
+                  if (option.ingredients.length > 6)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '+${option.ingredients.length - 6} more ingredients',
+                        style: theme.textTheme.muted.copyWith(fontSize: 10),
+                      ),
+                    ),
+                ],
+              ],
+              // Add bottom padding for the + button
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+        // Log button (+) positioned at bottom right
+        Positioned(
+          bottom: 8,
+          right: 8,
+          child: GestureDetector(
+            onTap: () => _logMeal(option, mealType),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                shape: BoxShape.circle,
               ),
-          ],
-        ],
-      ),
+              child: const Icon(
+                LucideIcons.plus,
+                size: 18,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

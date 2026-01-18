@@ -102,4 +102,28 @@ class FoodProvider with ChangeNotifier {
       'fat': logs.fold(0.0, (sum, log) => sum + log.fat),
     };
   }
+
+  /// Calculate the current logging streak (consecutive days)
+  Future<int> getLoggingStreak() async {
+    int streak = 0;
+    DateTime checkDate = DateTime.now();
+    
+    // Check consecutive days going backwards from today
+    for (int i = 0; i < 365; i++) {
+      try {
+        final logs = await _db.getLogsForDate(checkDate);
+        if (logs.isNotEmpty) {
+          streak++;
+          checkDate = checkDate.subtract(const Duration(days: 1));
+        } else {
+          break;
+        }
+      } catch (e) {
+        debugPrint('Error checking streak for date: $e');
+        break;
+      }
+    }
+    
+    return streak;
+  }
 }
